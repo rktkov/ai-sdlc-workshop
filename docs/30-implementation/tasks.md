@@ -29,10 +29,18 @@
 | `T-012` | DONE | 2026-11-04 | Paginated subscription import, channel metadata enrichment, upsert by `channel_id`, idempotent re-run, migration v5 and count. Happy and unhappy tests pass. |
 | `T-013` | DONE | 2026-11-04 | Interest validation and storage for 1–10 slugs. Seed sources list availability; unavailable sources are shown and never substituted. |
 | `T-014` | DONE | 2026-11-04 | Two-step onboarding: OAuth or stored token, subscription import, seed source choice, interest proposal/entry and the skip banner. Uses a provisional `spike-s01` profile until rubric v1 (`OQ-22`). |
+| `T-030` | DONE | 2026-11-04 | Deterministic query planner: one query per interest, 50 results, 30-day window and stable order. |
+| `T-031` | DONE | 2026-11-04 | One YouTube adapter port for search, channels, videos, subscriptions and mostPopular. Happy and unhappy tests pass. |
+| `T-032` | DONE | 2026-11-04 | Quota ledger with reserve/charge/release, single 80% warning, 100% refusal, stale release and migration v6. |
+| `T-033` | DONE | 2026-11-04 | Dedupe, watched/saved/shown exclusions, source priority, 20% micro-blogger target and explicit shortfall. |
+| `T-034` | DONE | 2026-11-04 | Text-only yt-dlp fetcher, atomic `0600` transcript staging, hash verification, delete and TTL sweep. |
+| `T-035` | DONE | 2026-11-04 | OpenAI-compatible LLM adapter, profile prompt, JSON schema and strict local validation with explicit failures. |
+| `T-036` | DONE | 2026-11-04 | Analysis repository with terminal rows per video and rubric, axis scores, migration v7 and explicit failure states. |
+| `T-037` | DONE | 2026-11-04 | Batch pipeline: plan, discover, enrich, select, fetch, stage, analyze and persist in order. Resume skips stored analyses. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. Next task: `T-030`.
+Definition of Done passes and the backlog is updated. Next task: `T-040`.
 
 ## Sprint 1
 

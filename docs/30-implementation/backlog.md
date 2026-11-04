@@ -102,6 +102,10 @@ not block the foundation work.
 **E2 status:** `T-010`…`T-014` are `DONE` (2026-11-04). The live Google consent is the
 only manual check left. The first profile is provisional (`OQ-22`).
 
+**E4 status:** `T-030`…`T-037` are `DONE` (2026-11-04). Discovery, quota, transcript
+staging, analysis and batch orchestration pass their unit tests. Live YouTube, yt-dlp and
+model calls still need the owner's consent and local binaries.
+
 ## 8. Day 3 — loop and quality
 
 | Epic | Tasks |
@@ -159,3 +163,11 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `T-012` | DONE. Paginated subscription import, channel metadata, upsert by `channel_id`, idempotent re-run, migration v5 and count. Happy and unhappy tests pass. |
 | 2026-11-04 | `T-013` | DONE. Interest validation and storage for 1–10 slugs; seed source availability is explicit and unavailable sources are never substituted. |
 | 2026-11-04 | `T-014` | DONE. Two-step onboarding with token reuse, subscription import, seed source choice, interest proposal/entry and skip banner. Provisional `spike-s01` profile (`OQ-22`). |
+| 2026-11-04 | `T-030` | DONE. Deterministic query planner; 5 interests become 5 ordered queries. |
+| 2026-11-04 | `T-031` | DONE. One YouTube adapter port for search, channels, videos, subscriptions and mostPopular. |
+| 2026-11-04 | `T-032` | DONE. Quota ledger with reserve/charge/release, 80% warning, 100% refusal and migration v6. |
+| 2026-11-04 | `T-033` | DONE. Dedupe, exclusions, source priority and 20% micro-blogger target with shortfall. |
+| 2026-11-04 | `T-034` | DONE. Text-only transcript fetch and atomic `0600` staging with hash, delete and TTL sweep. |
+| 2026-11-04 | `T-035` | DONE. One LLM adapter, profile prompt, JSON schema and strict validation. |
+| 2026-11-04 | `T-036` | DONE. Analysis repository with terminal rows and failure states; migration v7. |
+| 2026-11-04 | `T-037` | DONE. Batch pipeline in stage order with resume from stored analyses and explicit failures. |
