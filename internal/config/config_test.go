@@ -144,3 +144,69 @@ func TestRedactedYouTube(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadAnalysisDefaults(t *testing.T) {
+	cfg, err := Load(func(string) string { return "" })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Analysis.Concurrency != 2 || !cfg.Analysis.Staging {
+		t.Fatalf("Analysis = %+v", cfg.Analysis)
+	}
+	if cfg.Analysis.StagingTTL.Hours() != 24 || cfg.Analysis.MaxBytes != 8<<20 {
+		t.Fatalf("Analysis = %+v", cfg.Analysis)
+	}
+	if cfg.Analysis.YTDLP != "yt-dlp" || cfg.LLM.Timeout.Seconds() != 60 {
+		t.Fatalf("Analysis.YTDLP = %q, LLM.Timeout = %v", cfg.Analysis.YTDLP, cfg.LLM.Timeout)
+	}
+	if cfg.YouTube.Region != "US" {
+		t.Fatalf("Region = %q", cfg.YouTube.Region)
+	}
+}
+
+func TestLoadAnalysisOverrides(t *testing.T) {
+	env := map[string]string{
+		"ANALYSIS_CONCURRENCY":   "4",
+		"TRANSCRIPT_STAGING":     "false",
+		"TRANSCRIPT_STAGING_TTL": "48h",
+		"TRANSCRIPT_MAX_BYTES":   "1024",
+		"YTDLP_BIN":              "/usr/local/bin/yt-dlp",
+		"LLM_TIMEOUT":            "30s",
+		"YOUTUBE_REGION":         "GB",
+	}
+	cfg, err := Load(func(key string) string { return env[key] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Analysis.Concurrency != 4 || cfg.Analysis.Staging {
+		t.Fatalf("Analysis = %+v", cfg.Analysis)
+	}
+	if cfg.Analysis.StagingTTL.Hours() != 48 || cfg.Analysis.MaxBytes != 1024 {
+		t.Fatalf("Analysis = %+v", cfg.Analysis)
+	}
+	if cfg.Analysis.YTDLP != "/usr/local/bin/yt-dlp" || cfg.LLM.Timeout.Seconds() != 30 {
+		t.Fatalf("Analysis.YTDLP = %q, LLM.Timeout = %v", cfg.Analysis.YTDLP, cfg.LLM.Timeout)
+	}
+	if cfg.YouTube.Region != "GB" {
+		t.Fatalf("Region = %q", cfg.YouTube.Region)
+	}
+}
+
+func TestLoadAnalysisInvalid(t *testing.T) {
+	env := map[string]string{
+		"ANALYSIS_CONCURRENCY":   "0",
+		"TRANSCRIPT_STAGING":     "maybe",
+		"TRANSCRIPT_STAGING_TTL": "24",
+		"TRANSCRIPT_MAX_BYTES":   "0",
+		"LLM_TIMEOUT":            "soon",
+	}
+	_, err := Load(func(key string) string { return env[key] })
+	if err == nil {
+		t.Fatal("Load() = nil, want an error")
+	}
+	for _, want := range []string{"ANALYSIS_CONCURRENCY", "TRANSCRIPT_STAGING", "TRANSCRIPT_STAGING_TTL", "TRANSCRIPT_MAX_BYTES", "LLM_TIMEOUT"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not mention %s", err, want)
+		}
+	}
+}

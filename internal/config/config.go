@@ -6,16 +6,18 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config is the complete runtime configuration.
 // It is immutable after Load returns.
 type Config struct {
-	App     AppConfig
-	Feed    FeedConfig
-	YouTube YouTubeConfig
-	LLM     LLMConfig
-	Storage StorageConfig
+	App      AppConfig
+	Feed     FeedConfig
+	YouTube  YouTubeConfig
+	Analysis AnalysisConfig
+	LLM      LLMConfig
+	Storage  StorageConfig
 }
 
 // AppConfig controls logging and the runtime mode.
@@ -33,6 +35,16 @@ type FeedConfig struct {
 type YouTubeConfig struct {
 	OAuthClientFile string
 	APIKey          string
+	Region          string
+}
+
+// AnalysisConfig controls transcript staging and analysis concurrency.
+type AnalysisConfig struct {
+	Concurrency int
+	Staging     bool
+	StagingTTL  time.Duration
+	MaxBytes    int64
+	YTDLP       string
 }
 
 // LLMConfig controls the OpenAI-compatible endpoint.
@@ -41,6 +53,7 @@ type LLMConfig struct {
 	Model    string
 	APIKey   string
 	JSONMode bool
+	Timeout  time.Duration
 }
 
 // StorageConfig controls local state.
@@ -66,12 +79,21 @@ func Load(getenv func(string) string) (Config, error) {
 		YouTube: YouTubeConfig{
 			OAuthClientFile: strings.TrimSpace(getenv("GOOGLE_OAUTH_CLIENT_FILE")),
 			APIKey:          strings.TrimSpace(getenv("YOUTUBE_API_KEY")),
+			Region:          valueOr(getenv, "YOUTUBE_REGION", "US"),
+		},
+		Analysis: AnalysisConfig{
+			Concurrency: 2,
+			Staging:     true,
+			StagingTTL:  24 * time.Hour,
+			MaxBytes:    8 << 20,
+			YTDLP:       valueOr(getenv, "YTDLP_BIN", "yt-dlp"),
 		},
 		LLM: LLMConfig{
 			BaseURL:  valueOr(getenv, "LLM_BASE_URL", "http://localhost:11434/v1"),
 			Model:    valueOr(getenv, "LLM_MODEL", "lfm2.5-1.2b-instruct"),
 			APIKey:   valueOr(getenv, "LLM_API_KEY", "not-needed"),
 			JSONMode: true,
+			Timeout:  60 * time.Second,
 		},
 		Storage: StorageConfig{
 			DataDir: valueOr(getenv, "YTFEED_DATA_DIR", "./data"),
@@ -96,6 +118,42 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 	}
 
+	if raw := strings.TrimSpace(getenv("ANALYSIS_CONCURRENCY")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > 8 {
+			problems = append(problems, "ANALYSIS_CONCURRENCY must be an integer between 1 and 8")
+		} else {
+			cfg.Analysis.Concurrency = value
+		}
+	}
+	if raw := strings.TrimSpace(getenv("TRANSCRIPT_STAGING")); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			problems = append(problems, "TRANSCRIPT_STAGING must be true, false, 1 or 0")
+		} else {
+			cfg.Analysis.Staging = value
+		}
+	}
+	if raw := strings.TrimSpace(getenv("TRANSCRIPT_STAGING_TTL")); raw != "" {
+		value, err := time.ParseDuration(raw)
+		if err != nil || value <= 0 {
+			problems = append(problems, "TRANSCRIPT_STAGING_TTL must be a positive duration like 24h")
+		} else {
+			cfg.Analysis.StagingTTL = value
+		}
+	}
+	if raw := strings.TrimSpace(getenv("TRANSCRIPT_MAX_BYTES")); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value <= 0 || value > 64<<20 {
+			problems = append(problems, "TRANSCRIPT_MAX_BYTES must be between 1 and 67108864")
+		} else {
+			cfg.Analysis.MaxBytes = value
+		}
+	}
+	if strings.TrimSpace(cfg.Analysis.YTDLP) == "" {
+		problems = append(problems, "YTDLP_BIN must not be empty")
+	}
+
 	if !validURL(cfg.LLM.BaseURL) {
 		problems = append(problems, "LLM_BASE_URL must be an http or https URL")
 	}
@@ -109,6 +167,15 @@ func Load(getenv func(string) string) (Config, error) {
 			problems = append(problems, "LLM_JSON_MODE must be true, false, 1 or 0")
 		} else {
 			cfg.LLM.JSONMode = mode
+		}
+	}
+
+	if raw := strings.TrimSpace(getenv("LLM_TIMEOUT")); raw != "" {
+		value, err := time.ParseDuration(raw)
+		if err != nil || value <= 0 {
+			problems = append(problems, "LLM_TIMEOUT must be a positive duration like 60s")
+		} else {
+			cfg.LLM.Timeout = value
 		}
 	}
 
@@ -137,6 +204,13 @@ func (c Config) Redacted() map[string]string {
 		"llm_api_key":               key,
 		"youtube_oauth_client_file": c.YouTube.OAuthClientFile,
 		"youtube_api_key":           redactSecret(c.YouTube.APIKey),
+		"youtube_region":            c.YouTube.Region,
+		"analysis_concurrency":      strconv.Itoa(c.Analysis.Concurrency),
+		"transcript_staging":        strconv.FormatBool(c.Analysis.Staging),
+		"transcript_staging_ttl":    c.Analysis.StagingTTL.String(),
+		"transcript_max_bytes":      strconv.FormatInt(c.Analysis.MaxBytes, 10),
+		"ytdlp_bin":                 c.Analysis.YTDLP,
+		"llm_timeout":               c.LLM.Timeout.String(),
 		"data_dir":                  c.Storage.DataDir,
 	}
 }
