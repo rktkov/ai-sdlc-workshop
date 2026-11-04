@@ -144,3 +144,4 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `T-021` | DONE. Signal scores, ±0.05 weight update, clamp and migration v4. Happy and unhappy tests pass. |
 | 2026-11-04 | `T-022` | DONE. Cold-period validation, active query, find by target and refresh. Expired rows stay. |
 | 2026-11-04 | `T-023` | DONE. Reason picker keys 1–4, Enter default, Esc other and scope preview. |
+| 2026-11-04 | `T-024` | DONE. Profile snapshot returns axes, weights, examples, note and rubric version. No interests. |

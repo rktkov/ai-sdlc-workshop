@@ -194,3 +194,46 @@ func TestColdPeriodValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestSnapshotHappy(t *testing.T) {
+	profile := Profile{
+		UserID:        "owner",
+		Note:          "prefer depth",
+		RubricVersion: "v1",
+		Axes: []Axis{
+			{Name: "depth", Weight: 0.7, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+			{Name: "novelty", Weight: 0.5, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+			{Name: "clarity", Weight: 0.6, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+		},
+		Interests: []string{"ai-agents"},
+	}
+	service := &Service{Profiles: &fakeProfiles{profile: profile}}
+
+	got, err := service.Snapshot(context.Background(), "owner")
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	if got.UserID != profile.UserID || got.Note != profile.Note || got.RubricVersion != profile.RubricVersion {
+		t.Fatalf("snapshot = %+v", got)
+	}
+	if len(got.Axes) != 3 || got.Axes[0].Name != "depth" {
+		t.Fatalf("axes = %+v", got.Axes)
+	}
+	got.Axes[0].Name = "mutated"
+	if service.Profiles.(*fakeProfiles).profile.Axes[0].Name != "depth" {
+		t.Fatal("snapshot shares the profile axis slice")
+	}
+}
+
+func TestSnapshotUnhappy(t *testing.T) {
+	if _, err := (&Service{}).Snapshot(context.Background(), "owner"); err == nil {
+		t.Fatal("Snapshot(nil reader) = nil, want an error")
+	}
+	if _, err := (&Service{Profiles: &fakeProfiles{err: tasteError{}}}).Snapshot(context.Background(), "owner"); err == nil {
+		t.Fatal("Snapshot(error reader) = nil, want an error")
+	}
+}
+
+type tasteError struct{}
+
+func (tasteError) Error() string { return "boom" }
