@@ -1,0 +1,128 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/rktkov/ytfeed/internal/transport/contract"
+)
+
+func feedTestEnv(t *testing.T) func(string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "api-token"), []byte("secret"), 0o600); err != nil {
+		t.Fatalf("write token: %v", err)
+	}
+	return func(key string) string {
+		if key == "YTFEED_DATA_DIR" {
+			return dir
+		}
+		return ""
+	}
+}
+
+func wireCard() contract.FeedCard {
+	return contract.FeedCard{
+		CardID: "c1", VideoID: "v1", ChannelID: "ch1", Title: "A card",
+		Channel: "A channel", State: "analyzed", Topic: "ai-agents", TLDR: "tldr",
+		Similarity: "new territory", WhyThisCard: "why", Position: 0,
+		PublishedAt: "2026-11-04T12:00:00Z",
+	}
+}
+
+func TestFeedSSE(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Accept"); got != "text/event-stream" {
+			t.Errorf("Accept = %q", got)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "event: batch.started\ndata: {}\n\n")
+		data, _ := json.Marshal(wireCard())
+		_, _ = fmt.Fprintf(w, "event: card.upsert\ndata: %s\n\n", data)
+		_, _ = fmt.Fprint(w, "event: batch.done\ndata: {}\n\n")
+	}))
+	defer server.Close()
+
+	var out, errOut bytes.Buffer
+	code := Run(context.Background(), []string{"feed"}, feedTestEnv(t), &out, &errOut, server.URL)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "A card") || !strings.Contains(out.String(), "State: analyzed") {
+		t.Fatalf("stdout = %q", out.String())
+	}
+}
+
+func TestFeedJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Accept"); got != "application/json" {
+			t.Errorf("Accept = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(contract.Feed{BatchID: "b1", State: "completed", Cards: []contract.FeedCard{wireCard()}})
+	}))
+	defer server.Close()
+
+	var out, errOut bytes.Buffer
+	code := Run(context.Background(), []string{"feed", "--json"}, feedTestEnv(t), &out, &errOut, server.URL)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut.String())
+	}
+	var payload contract.Feed
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("stdout is not one JSON object: %v\n%s", err, out.String())
+	}
+	if payload.BatchID != "b1" || len(payload.Cards) != 1 {
+		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestFeedUnhappy(t *testing.T) {
+	t.Run("no feed", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "no feed", http.StatusNotFound)
+		}))
+		defer server.Close()
+		var out, errOut bytes.Buffer
+		if code := Run(context.Background(), []string{"feed"}, feedTestEnv(t), &out, &errOut, server.URL); code != 6 {
+			t.Fatalf("exit = %d, want 6", code)
+		}
+	})
+
+	t.Run("unauthorized", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		}))
+		defer server.Close()
+		var out, errOut bytes.Buffer
+		if code := Run(context.Background(), []string{"feed"}, feedTestEnv(t), &out, &errOut, server.URL); code != 2 {
+			t.Fatalf("exit = %d, want 2", code)
+		}
+	})
+
+	t.Run("server error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "boom", http.StatusInternalServerError)
+		}))
+		defer server.Close()
+		var out, errOut bytes.Buffer
+		if code := Run(context.Background(), []string{"feed"}, feedTestEnv(t), &out, &errOut, server.URL); code != 1 {
+			t.Fatalf("exit = %d, want 1", code)
+		}
+	})
+
+	t.Run("bad flag", func(t *testing.T) {
+		var out, errOut bytes.Buffer
+		if code := Run(context.Background(), []string{"feed", "--bad"}, feedTestEnv(t), &out, &errOut, ""); code != 2 {
+			t.Fatalf("exit = %d, want 2", code)
+		}
+	})
+}

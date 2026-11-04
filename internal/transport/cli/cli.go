@@ -49,6 +49,8 @@ func RunWithInput(ctx context.Context, args []string, getenv func(string) string
 	}
 
 	switch args[0] {
+	case "feed":
+		return runFeed(ctx, args[1:], getenv, stdout, stderr, baseURL)
 	case "onboard":
 		return runOnboard(ctx, args[1:], getenv, stdin, stdout, stderr)
 	case "auth":
@@ -337,6 +339,8 @@ func printHelp(w io.Writer) {
 	var buf bytes.Buffer
 	buf.WriteString("ytfeed — local YouTube feed composer\n\n")
 	buf.WriteString("Usage:\n")
+	buf.WriteString("  ytfeed feed              Show today's cards\n")
+	buf.WriteString("  ytfeed feed --json       Print one JSON feed object\n")
 	buf.WriteString("  ytfeed onboard           Connect Google and choose interests\n")
 	buf.WriteString("  ytfeed auth login        Authorize YouTube access\n")
 	buf.WriteString("  ytfeed auth status       Show the stored credential\n")

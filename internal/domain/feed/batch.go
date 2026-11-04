@@ -11,6 +11,13 @@ import (
 	"github.com/rktkov/ytfeed/internal/domain/taste"
 )
 
+var (
+	// ErrNoCachedFeed means no completed batch exists for the user.
+	ErrNoCachedFeed = errors.New("no cached feed")
+	// ErrBatchNotFound means the batch does not exist.
+	ErrBatchNotFound = errors.New("batch not found")
+)
+
 // BatchState is the lifecycle state of one batch.
 type BatchState string
 
