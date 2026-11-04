@@ -87,7 +87,6 @@ type fakeFiles struct {
 	statErr   error
 	deleteErr error
 	dir       string
-	path      string
 }
 
 func (f *fakeFiles) Dir() string { return f.dir }
