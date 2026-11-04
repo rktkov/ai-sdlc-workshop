@@ -369,7 +369,10 @@ Append-only. One line per event, newest last.
 - 2026-11-04 — `T-007` done: `POST /v1/gestures` → `taste.Service` → SQLite. A left
   swipe commits a signal and a cold period in one transaction. A retry is idempotent.
   Sprint 1 code is complete. The spikes need owner resources and decisions.
-- 2026-11-04 — `S-02` blocked: `docs/30-implementation/spikes/s-02-opencode-api.md`. The
-  local server API is session-based and experimental, not OpenAI-compatible. The managed
-  OpenCode provider is OpenAI-compatible and can be a preset. A paid key is needed to
-  finish the contract tests.
+- 2026-11-04 — `S-02` closed: `docs/30-implementation/spikes/s-02-opencode-api.md`. The
+  local server API is session-based and experimental, not OpenAI-compatible. The owner
+  put provider B out of v1; the managed endpoint stays a future preset only. `OQ-06`
+  moved to Resolved.
+- 2026-11-04 — `S-01` plan ready: `docs/30-implementation/spikes/s-01-model-comparison.md`.
+  Six models, CPU-first Intel target, schema and rubric tests, happy and unhappy paths.
+  Blocked on owner approval to install `llama.cpp` and download about 12 GB.

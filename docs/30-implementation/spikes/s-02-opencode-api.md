@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially executed. Blocked on a paid OpenCode API key.
+Closed on 2026-11-04. Provider B is out of v1.
 
 ## Question
 
@@ -126,22 +126,19 @@ of v1".
 
 ## Blockers
 
-| Blocker | Owner action |
-|---------|--------------|
-| Paid OpenCode API key | Provide a key, or confirm provider B is out of v1. |
-| Model choice | Confirm the model id to test, or accept the default from `S-01`. |
-| Cost ceiling | Confirm a small test budget. |
-| Rubric v1 axes | `Q3` content is still open. A synthetic axis set is enough for the contract test. |
+None. The owner closed provider B for v1.
 
-## Decision requested
+## Decision
 
-Choose one:
+The owner chose **option 1** on 2026-11-04:
 
-1. **Keep provider B out of v1.** No key, no adapter. `OQ-06` stays "preset only".
-2. **Test the paid preset.** Provide an OpenCode API key and a model id. I will run
-   `S02-T06`…`S02-T09` and report.
-3. **Use the local server API.** This requires a second adapter and an ADR. I recommend
-   against it.
+- Provider B is **out of v1**.
+- No second adapter.
+- The local opencode server API is rejected for `ytfeed`.
+- The managed OpenAI-compatible endpoint stays a possible future preset.
+- `OQ-06` is resolved with this decision.
+
+The paid tests `S02-T06`…`S02-T09` are not run. They are not needed for the v1 decision.
 
 ## Artifacts
 
@@ -152,4 +149,4 @@ Choose one:
 
 ## Next
 
-The owner decision above. Until then, `S-02` is `BLOCKED` and `S-01` / `S-03` remain open.
+`S-01` — model comparison. `S-03` remains open.
