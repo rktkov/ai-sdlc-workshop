@@ -17,6 +17,7 @@ import (
 	"github.com/rktkov/ytfeed/internal/domain/identity"
 	"github.com/rktkov/ytfeed/internal/domain/taste"
 	"github.com/rktkov/ytfeed/internal/repository/sqlite"
+	"github.com/rktkov/ytfeed/internal/repository/tokenfile"
 	"github.com/rktkov/ytfeed/internal/storage"
 	"github.com/rktkov/ytfeed/internal/transport/contract"
 	httpapi "github.com/rktkov/ytfeed/internal/transport/http"
@@ -68,6 +69,8 @@ func runAuth(ctx context.Context, args []string, getenv func(string) string, std
 	switch args[0] {
 	case "login":
 		return runAuthLogin(ctx, args[1:], getenv, stdout, stderr)
+	case "status":
+		return runAuthStatus(ctx, args[1:], getenv, stdout, stderr)
 	default:
 		_, _ = fmt.Fprintf(stderr, "ytfeed auth: unknown command %q\n", args[0])
 		return 2
@@ -124,7 +127,58 @@ func runAuthLoginWith(ctx context.Context, args []string, getenv func(string) st
 	if err != nil {
 		return authError(stderr, err)
 	}
-	_, _ = fmt.Fprintf(stdout, "authorized scope=%s expires_at=%s fingerprint=%s\n",
+	store := tokenfile.New(cfg.Storage.DataDir)
+	if err := store.Write(ctx, token); err != nil {
+		_, _ = fmt.Fprintf(stderr, "ytfeed auth login: store token: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(stdout, "authorized scope=%s expires_at=%s fingerprint=%s token=%s\n",
+		token.Scope, token.ExpiresAt.UTC().Format(time.RFC3339), token.Fingerprint(), store.Path())
+	return 0
+}
+
+func runAuthStatus(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
+	if len(args) > 0 {
+		_, _ = fmt.Fprintf(stderr, "ytfeed auth status: unexpected argument %q\n", args[0])
+		return 2
+	}
+	cfg, err := config.Load(getenv)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 2
+	}
+	store := tokenfile.New(cfg.Storage.DataDir)
+	token, err := store.Read(ctx)
+	if err != nil {
+		if errors.Is(err, identity.ErrTokenNotFound) {
+			_, _ = fmt.Fprintln(stderr, "ytfeed auth status: not authenticated; run `ytfeed auth login`")
+			return 2
+		}
+		_, _ = fmt.Fprintf(stderr, "ytfeed auth status: %v\n", err)
+		return 1
+	}
+	if !token.ExpiresAt.After(time.Now().Add(30 * time.Second)) {
+		if cfg.YouTube.OAuthClientFile == "" {
+			_, _ = fmt.Fprintln(stderr, "ytfeed auth status: token expired; run `ytfeed auth login`")
+			return 2
+		}
+		client, err := identity.LoadClient(cfg.YouTube.OAuthClientFile)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "ytfeed auth status: %v\n", err)
+			return 2
+		}
+		manager := &identity.Manager{Store: store, Client: client}
+		token, err = manager.ValidToken(ctx)
+		if err != nil {
+			if errors.Is(err, identity.ErrUnauthorized) {
+				_, _ = fmt.Fprintln(stderr, "ytfeed auth status: authorization revoked; run `ytfeed auth login`")
+				return 2
+			}
+			_, _ = fmt.Fprintf(stderr, "ytfeed auth status: %v\n", err)
+			return 1
+		}
+	}
+	_, _ = fmt.Fprintf(stdout, "status=active scope=%s expires_at=%s fingerprint=%s\n",
 		token.Scope, token.ExpiresAt.UTC().Format(time.RFC3339), token.Fingerprint())
 	return 0
 }
@@ -276,6 +330,7 @@ func printHelp(w io.Writer) {
 	buf.WriteString("ytfeed — local YouTube feed composer\n\n")
 	buf.WriteString("Usage:\n")
 	buf.WriteString("  ytfeed auth login        Authorize YouTube access\n")
+	buf.WriteString("  ytfeed auth status       Show the stored credential\n")
 	buf.WriteString("  ytfeed doctor            Check the local server\n")
 	buf.WriteString("  ytfeed serve             Run the local API server\n")
 	buf.WriteString("  ytfeed serve --allow-remote  Bind to a non-loopback address\n")

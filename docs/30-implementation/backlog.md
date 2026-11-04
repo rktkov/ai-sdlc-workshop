@@ -152,3 +152,4 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `T-024` | DONE. Profile snapshot returns axes, weights, examples, note and rubric version. No interests. |
 | 2026-11-04 | `S-03` | DONE. Measured 510 units for a 5-interest batch. 20 cards GO within 10k/day. Decision A: five searches per batch. `OQ-21` resolved. |
 | 2026-11-04 | `T-010` | DONE. OAuth authorization-code flow with PKCE S256, `youtube.readonly`, loopback on `127.0.0.1`, state check, 2-minute timeout and `auth login`. Unit and CLI tests pass. Real Google consent timed out twice; owner action remains. |
+| 2026-11-04 | `T-011` | DONE. Atomic `0600` token file, `auth status`, single-flight refresh and revoked-grant handling. Happy and unhappy tests pass. |

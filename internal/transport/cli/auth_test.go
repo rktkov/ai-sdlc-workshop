@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rktkov/ytfeed/internal/domain/identity"
+	"github.com/rktkov/ytfeed/internal/repository/tokenfile"
 )
 
 func TestAuthLoginHappy(t *testing.T) {
@@ -36,6 +40,127 @@ func TestAuthLoginHappy(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "access-secret") || strings.Contains(out.String(), "refresh-secret") {
 		t.Fatalf("stdout leaks the token: %q", out.String())
+	}
+
+	info, err := os.Stat(filepath.Join(dir, "token"))
+	if err != nil {
+		t.Fatalf("token file: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("token mode = %o, want 600", info.Mode().Perm())
+	}
+	stored, err := tokenfile.New(dir).Read(context.Background())
+	if err != nil {
+		t.Fatalf("read token: %v", err)
+	}
+	if stored.AccessToken != "access-secret" {
+		t.Fatalf("stored access token = %q", stored.AccessToken)
+	}
+}
+
+func TestAuthLoginWriteError(t *testing.T) {
+	dir := t.TempDir()
+	clientPath := writeAuthClient(t, dir)
+	file := filepath.Join(dir, "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	env := authEnv(clientPath, filepath.Join(file, "data"))
+
+	var out, errOut bytes.Buffer
+	code := runAuthLoginWith(context.Background(), nil, env, &out, &errOut, func(context.Context, identity.Service) (identity.Token, error) {
+		return identity.Token{AccessToken: "access-secret", ExpiresAt: time.Now()}, nil
+	})
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1; stderr = %s", code, errOut.String())
+	}
+}
+
+func TestAuthStatusHappy(t *testing.T) {
+	dir := t.TempDir()
+	writeStoredToken(t, dir, identity.Token{
+		AccessToken: "access-secret",
+		Scope:       identity.ScopeYouTubeReadOnly,
+		ExpiresAt:   time.Now().Add(time.Hour),
+	})
+
+	var out, errOut bytes.Buffer
+	code := Run(context.Background(), []string{"auth", "status"}, func(key string) string {
+		if key == "YTFEED_DATA_DIR" {
+			return dir
+		}
+		return ""
+	}, &out, &errOut, "")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "active") {
+		t.Fatalf("stdout = %q", out.String())
+	}
+	if strings.Contains(out.String(), "access-secret") {
+		t.Fatalf("stdout leaks the token: %q", out.String())
+	}
+}
+
+func TestAuthStatusMissing(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := Run(context.Background(), []string{"auth", "status"}, func(key string) string {
+		if key == "YTFEED_DATA_DIR" {
+			return t.TempDir()
+		}
+		return ""
+	}, &out, &errOut, "")
+	if code != 2 {
+		t.Fatalf("exit = %d, want 2", code)
+	}
+	if !strings.Contains(errOut.String(), "not authenticated") {
+		t.Fatalf("stderr = %q", errOut.String())
+	}
+}
+
+func TestAuthStatusRevoked(t *testing.T) {
+	dir := t.TempDir()
+	writeStoredToken(t, dir, identity.Token{
+		AccessToken:  "old-access",
+		RefreshToken: "refresh-1",
+		ExpiresAt:    time.Now().Add(-time.Minute),
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
+	}))
+	defer server.Close()
+
+	clientPath := filepath.Join(dir, "client.json")
+	body := fmt.Sprintf(`{"installed":{"client_id":"id","client_secret":"secret","auth_uri":"https://auth.example.test/auth","token_uri":%q}}`, server.URL)
+	if err := os.WriteFile(clientPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("write client: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	code := Run(context.Background(), []string{"auth", "status"}, func(key string) string {
+		switch key {
+		case "YTFEED_DATA_DIR":
+			return dir
+		case "GOOGLE_OAUTH_CLIENT_FILE":
+			return clientPath
+		default:
+			return ""
+		}
+	}, &out, &errOut, "")
+	if code != 2 {
+		t.Fatalf("exit = %d, want 2; stderr = %s", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "revoked") {
+		t.Fatalf("stderr = %q", errOut.String())
+	}
+}
+
+func writeStoredToken(t *testing.T, dir string, token identity.Token) {
+	t.Helper()
+	if err := tokenfile.New(dir).Write(context.Background(), token); err != nil {
+		t.Fatalf("write token: %v", err)
 	}
 }
 

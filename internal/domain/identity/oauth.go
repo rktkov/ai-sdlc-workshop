@@ -53,13 +53,13 @@ type Client struct {
 	TokenURL     string
 }
 
-// Token is the result of a consent flow. The caller decides how to store it.
+// Token is the result of a consent flow.
 type Token struct {
-	AccessToken  string
-	RefreshToken string
-	TokenType    string
-	Scope        string
-	ExpiresAt    time.Time
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	TokenType    string    `json:"token_type,omitempty"`
+	Scope        string    `json:"scope,omitempty"`
+	ExpiresAt    time.Time `json:"expires_at"`
 }
 
 // Fingerprint returns a short, non-reversible identifier for diagnostics.

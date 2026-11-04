@@ -2,9 +2,10 @@
 
 ## Status
 
-`T-010` implemented on 2026-11-04. The flow uses PKCE S256, the
-`youtube.readonly` scope and a loopback redirect on `127.0.0.1`. The real consent
-is the remaining check. `T-010` returns the token. `T-011` stores it.
+`T-010` and `T-011` implemented on 2026-11-04. The flow uses PKCE S256, the
+`youtube.readonly` scope and a loopback redirect on `127.0.0.1`. `T-011` stores the token
+at `<data>/token` with `0600` and refreshes it once for concurrent callers. The real
+consent is the remaining check.
 
 ## Location
 
@@ -56,7 +57,7 @@ minutes for the callback. The path is not a secret. The client file is.
 ## Security
 
 - The repository ignores `.secrets/` and `.env` (`C-2`).
-- `T-011` writes the token file with `0600` (`C-17`). `T-010` does not persist it.
+- `T-011` writes `<data>/token` with `0600` (`C-17`). The token is replaced atomically.
 - The token and the client secret never appear in logs, traces or errors (`L-10`, `E-17`).
 - The test suite uses a fake OAuth server. It never reads the real client secret.
 
@@ -84,8 +85,9 @@ and approve the scope within the two-minute window. Then `T-011` can store the t
 `ytfeed auth login` prints one line:
 
 ```
-authorized scope=<scope> expires_at=<UTC time> fingerprint=<short hash>
+authorized scope=<scope> expires_at=<UTC time> fingerprint=<short hash> token=<path>
 ```
 
-It never prints the access token or the refresh token. `T-011` adds the `0600` token
-file and the refresh path.
+It never prints the access token or the refresh token. `ytfeed auth status` prints the
+stored status, expiry and fingerprint. `T-011` writes the token file with `0600` and
+refreshes it when it is about to expire.
