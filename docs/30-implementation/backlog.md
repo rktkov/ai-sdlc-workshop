@@ -99,6 +99,9 @@ not block the foundation work.
 | E4 | LLM adapter, prompt builder, JSON schema, failure states |
 | E5 | Batch composition, order, streaming, card render |
 
+**E2 status:** `T-010`…`T-014` are `DONE` (2026-11-04). The live Google consent is the
+only manual check left. The first profile is provisional (`OQ-22`).
+
 ## 8. Day 3 — loop and quality
 
 | Epic | Tasks |
@@ -153,3 +156,6 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `S-03` | DONE. Measured 510 units for a 5-interest batch. 20 cards GO within 10k/day. Decision A: five searches per batch. `OQ-21` resolved. |
 | 2026-11-04 | `T-010` | DONE. OAuth authorization-code flow with PKCE S256, `youtube.readonly`, loopback on `127.0.0.1`, state check, 2-minute timeout and `auth login`. Unit and CLI tests pass. Real Google consent timed out twice; owner action remains. |
 | 2026-11-04 | `T-011` | DONE. Atomic `0600` token file, `auth status`, single-flight refresh and revoked-grant handling. Happy and unhappy tests pass. |
+| 2026-11-04 | `T-012` | DONE. Paginated subscription import, channel metadata, upsert by `channel_id`, idempotent re-run, migration v5 and count. Happy and unhappy tests pass. |
+| 2026-11-04 | `T-013` | DONE. Interest validation and storage for 1–10 slugs; seed source availability is explicit and unavailable sources are never substituted. |
+| 2026-11-04 | `T-014` | DONE. Two-step onboarding with token reuse, subscription import, seed source choice, interest proposal/entry and skip banner. Provisional `spike-s01` profile (`OQ-22`). |

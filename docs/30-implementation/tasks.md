@@ -26,10 +26,13 @@
 | `S-03` | DONE | 2026-11-04 | Measured 510 units for a 5-interest batch (5 search, 5 videos, 5 channels). 20 cards GO within 10k/day. Decision A: five searches per batch. `OQ-21` resolved. |
 | `T-010` | DONE | 2026-11-04 | OAuth authorization-code flow with PKCE S256, `youtube.readonly`, loopback on `127.0.0.1`, state check, 2-minute timeout and `auth login`. Unit and CLI tests pass. Real Google consent timed out twice; owner action remains. |
 | `T-011` | DONE | 2026-11-04 | Atomic `0600` token file at `<data>/token`, `auth status`, and single-flight refresh. Revoked grants return `ErrUnauthorized` and exit `2`. Happy and unhappy tests pass. |
+| `T-012` | DONE | 2026-11-04 | Paginated subscription import, channel metadata enrichment, upsert by `channel_id`, idempotent re-run, migration v5 and count. Happy and unhappy tests pass. |
+| `T-013` | DONE | 2026-11-04 | Interest validation and storage for 1–10 slugs. Seed sources list availability; unavailable sources are shown and never substituted. |
+| `T-014` | DONE | 2026-11-04 | Two-step onboarding: OAuth or stored token, subscription import, seed source choice, interest proposal/entry and the skip banner. Uses a provisional `spike-s01` profile until rubric v1 (`OQ-22`). |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. Next task: `T-012`.
+Definition of Done passes and the backlog is updated. Next task: `T-030`.
 
 ## Sprint 1
 

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -37,12 +38,19 @@ var (
 
 // Run executes one command and returns the process exit code.
 func Run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer, baseURL string) int {
+	return RunWithInput(ctx, args, getenv, os.Stdin, stdout, stderr, baseURL)
+}
+
+// RunWithInput executes one command with an explicit standard input.
+func RunWithInput(ctx context.Context, args []string, getenv func(string) string, stdin io.Reader, stdout, stderr io.Writer, baseURL string) int {
 	if len(args) == 0 {
 		_, _ = fmt.Fprintln(stderr, "ytfeed: command required")
 		return 2
 	}
 
 	switch args[0] {
+	case "onboard":
+		return runOnboard(ctx, args[1:], getenv, stdin, stdout, stderr)
 	case "auth":
 		return runAuth(ctx, args[1:], getenv, stdout, stderr)
 	case "doctor":
@@ -329,6 +337,7 @@ func printHelp(w io.Writer) {
 	var buf bytes.Buffer
 	buf.WriteString("ytfeed — local YouTube feed composer\n\n")
 	buf.WriteString("Usage:\n")
+	buf.WriteString("  ytfeed onboard           Connect Google and choose interests\n")
 	buf.WriteString("  ytfeed auth login        Authorize YouTube access\n")
 	buf.WriteString("  ytfeed auth status       Show the stored credential\n")
 	buf.WriteString("  ytfeed doctor            Check the local server\n")

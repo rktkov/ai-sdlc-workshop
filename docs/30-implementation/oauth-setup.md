@@ -2,10 +2,11 @@
 
 ## Status
 
-`T-010` and `T-011` implemented on 2026-11-04. The flow uses PKCE S256, the
+`T-010`…`T-014` implemented on 2026-11-04. The flow uses PKCE S256, the
 `youtube.readonly` scope and a loopback redirect on `127.0.0.1`. `T-011` stores the token
-at `<data>/token` with `0600` and refreshes it once for concurrent callers. The real
-consent is the remaining check.
+at `<data>/token` with `0600` and refreshes it once for concurrent callers. `T-012` imports
+subscriptions. `T-014` orchestrates onboarding and stores interests. The real consent is
+the remaining check.
 
 ## Location
 
@@ -53,6 +54,17 @@ GOOGLE_OAUTH_CLIENT_FILE="/Users/olegk/Documents/_docs/_dev/_horizont/horizont-t
 
 Add `--no-browser` to print the URL instead of opening the browser. The command waits two
 minutes for the callback. The path is not a secret. The client file is.
+
+The full flow is:
+
+```sh
+GOOGLE_OAUTH_CLIENT_FILE="/Users/olegk/Documents/_docs/_dev/_horizont/horizont-tools/apps/.secrets/gws/config/client_secret.json" \
+  go run ./cmd/ytfeed onboard --source subscriptions-only
+```
+
+`onboard` reuses a stored token, imports subscriptions, lists the three seed sources,
+proposes interests from the subscription graph and stores the choice. Step 2 can be
+skipped with `--skip-interests`.
 
 ## Security
 
