@@ -24,6 +24,22 @@ func TestHealthGolden(t *testing.T) {
 	}
 }
 
+func TestHealthGoldenRejectsMissingField(t *testing.T) {
+	raw, err := os.ReadFile("testdata/health-missing-schema.json")
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("decode golden: %v", err)
+	}
+
+	if _, ok := payload["schema_version"]; ok {
+		t.Fatal("invalid golden unexpectedly has schema_version")
+	}
+}
+
 func TestGoldenRoundTrip(t *testing.T) {
 	raw, err := os.ReadFile("testdata/health.json")
 	if err != nil {

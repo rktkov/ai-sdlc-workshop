@@ -19,9 +19,9 @@ defect in the task.
 
 | Layer | Purpose | Location | Command | Speed |
 |-------|---------|----------|---------|-------|
-| **Unit** | Functional behavior of one package, aggregate or pure function | `_test.go` beside the code | `make test` | Under 60 s |
-| **Contract** | Fix the UI/server payloads, SSE events, error mapping and exit codes | `internal/transport/contract` plus golden files | `make test-contract` | Seconds |
-| **E2E** | Data flow and control flow across the real binary, SQLite and fake external services | `e2e/` with `//go:build integration` | `make test-e2e` | Minutes |
+| **Unit** | Functional behavior of one package, aggregate or pure function. Every behavior has a happy and an unhappy case. | `_test.go` beside the code | `make test` | Under 60 s |
+| **Contract** | Fix the UI/server payloads, SSE events, error mapping and exit codes. Every contract has a success and an error case. | `internal/transport/contract` plus golden files | `make test-contract` | Seconds |
+| **E2E** | Data flow and control flow across the real binary, SQLite and fake external services. Every flow has a success and a failure variant. | `e2e/` with `//go:build integration` | `make test-e2e` | Minutes |
 | **Regression** | Every E2E flow stays in the suite. A bug fix adds a failing test first | Same as above | Same as above | Minutes |
 
 ### 2.1 Unit tests
@@ -47,16 +47,16 @@ context contracts in [`context-map.md`](../20-system-design/ddd/strategic/contex
 - A golden change is a contract change. It needs review, not an auto-update.
 - No Pact server or external contract tool. The repository uses stdlib tests and files.
 
-| ID | Contract | Covers |
-|----|----------|--------|
-| `CT-01` | Health | `GET /v1/health`, version, schema version |
-| `CT-02` | Onboarding | OAuth start and finish, subscription import, interests, seed source |
-| `CT-03` | Feed and SSE | Batch start, card upsert, card analyzed, progress, banner, done, error |
-| `CT-04` | Gestures | Left, right, down, up, save, reason, cursor, idempotency |
-| `CT-05` | Library | List, save, download, remove, open |
-| `CT-06` | Diagnostics | `doctor`, `stats` |
-| `CT-07` | Rating | Weekly prompt and value |
-| `CT-08` | Errors and exit codes | Domain error to HTTP status to `CLI-6` code |
+| ID | Contract | Happy case | Unhappy case |
+|----|----------|------------|--------------|
+| `CT-01` | Health | `GET /v1/health` returns version and schema version | Server unreachable or schema mismatch |
+| `CT-02` | Onboarding | OAuth completes, subscriptions import, interests save | Consent denied, revoked token, import fails |
+| `CT-03` | Feed and SSE | Batch streams cards to `batch.done` | Quota stops the batch, stream disconnects, invalid event |
+| `CT-04` | Gestures | Left, right, down, up, save and reason update the cursor | Duplicate gesture, stale session, invalid reason |
+| `CT-05` | Library | List, save, download, remove and open | Download fails, file missing, player missing |
+| `CT-06` | Diagnostics | `doctor` and `stats` report state | Unreachable service, unreadable database |
+| `CT-07` | Rating | Weekly value is stored once | Duplicate week, invalid value |
+| `CT-08` | Errors and exit codes | Each success maps to `0` | Each domain error maps to its `CLI-6` code |
 
 ### 2.3 E2E tests
 
@@ -73,20 +73,21 @@ The tests carry `//go:build integration` (`T-13`). `make test-e2e` runs
 `go test -tags=integration ./e2e/...`. It does not need Docker. The existing
 `make test-integration` target stays for future container-backed tests.
 
-| ID | Flow | Covers |
-|----|------|--------|
-| `E2E-01` | Onboarding to first card | `F1`…`F5`, `F13` |
-| `E2E-02` | Batch pipeline | `F6`…`F14`, `F24`, `F25` |
-| `E2E-03` | Gesture, cold period, resume | `F16`…`F19`, `F21` |
-| `E2E-04` | Library download and playback | `F17`, `F20` |
-| `E2E-05` | Degradation and cached feed | `F7`, `F24` |
-| `E2E-06` | Crash resume without re-fetch | `F25` |
-| `E2E-07` | Weekly rating | `F21` |
+| ID | Flow | Happy path | Unhappy path |
+|----|------|------------|--------------|
+| `E2E-01` | Onboarding to first card | Consent, import and interests succeed (`F1`…`F5`, `F13`) | Consent denied or import fails |
+| `E2E-02` | Batch pipeline | Cards are discovered, analyzed and streamed (`F6`…`F14`) | Quota, no candidates or invalid model output (`F24`, `F25`) |
+| `E2E-03` | Gesture, cold period, resume | Gesture commits and resume keeps the cursor (`F16`…`F19`, `F21`) | Duplicate gesture, stale lease or taste failure |
+| `E2E-04` | Library download and playback | Save, download and open succeed (`F17`, `F20`) | Download fails, disk full or player missing |
+| `E2E-05` | Degradation and cached feed | Cached cards and library are served (`F7`, `F24`) | No cached feed or unreadable database |
+| `E2E-06` | Crash resume without re-fetch | Restart resumes from the stage (`F25`) | Corrupt stage or missing transcript |
+| `E2E-07` | Weekly rating | One rating is stored (`F21`) | Duplicate week or invalid value |
 
 ## 3. Per-task artifacts
 
-Each task creates the listed artifacts before code. A dash means the task has no behavior
-of that type. `Gate` means the task only changes the build or harness.
+Each task creates the listed artifacts before code. Every ID is a **pair**: `-H` for the
+happy path and `-U` for the unhappy path. A dash means the task has no behavior of that
+type. `Gate` means the task only changes the build or harness.
 
 | Task | Unit | Contract | E2E |
 |------|------|----------|-----|
@@ -134,13 +135,14 @@ of that type. `Gate` means the task only changes the build or harness.
 A task is **ready** when:
 
 - The acceptance criteria are written as test cases.
+- Every behavior has a happy case and an unhappy case.
 - The test files and golden files exist.
 - The new tests fail for the expected reason.
 - The failure output is pasted in the task report.
 
 A task is **done** when:
 
-- The new tests pass.
+- The new tests pass, including both paths.
 - The full unit and contract suites pass.
 - The E2E suite passes for the affected flow.
 - No test is skipped without a linked issue (`T-23`).
@@ -150,7 +152,7 @@ A task is **done** when:
 ## 5. Regression policy
 
 1. Every E2E flow is permanent. Do not delete a flow to make a change pass.
-2. A bug fix starts with a test that fails on the old code (`T-20`).
+2. A bug fix starts with an unhappy-path test that fails on the old code (`T-20`).
 3. A contract change updates the golden file and both sides. The diff is reviewed.
 4. A flaky test is fixed or removed with a reason. It is never ignored.
 5. The regression suite runs before every task is marked `DONE`.

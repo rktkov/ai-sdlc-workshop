@@ -81,3 +81,12 @@ func TestFakeScripts(t *testing.T) {
 		t.Fatalf("fake yt-dlp output = %q", out)
 	}
 }
+
+func TestFakeScriptFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := testkit.WriteScript(t, dir, "yt-dlp-fail", "#!/bin/sh\nexit 3\n")
+
+	if _, err := exec.Command(path).CombinedOutput(); err == nil {
+		t.Fatal("fake yt-dlp failure exited 0, want a non-zero error")
+	}
+}

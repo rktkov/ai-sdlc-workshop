@@ -10,8 +10,8 @@
 ```
 Read execution/docs/20-system-design/handoff.md in full and follow it as your
 operating brief. Work from execution/docs/30-implementation/backlog.md and
-tasks.md. Start with task T-002. Do not write production code before its tests
-exist and fail.
+tasks.md. Start with task T-002. Do not write production code before its happy
+and unhappy tests exist and fail.
 ```
 
 ---

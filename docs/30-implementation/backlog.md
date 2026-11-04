@@ -27,7 +27,9 @@ must fail before the code exists. The task report must paste the failure. The fu
 - **Contract tests** fix the CLI/server payloads, SSE events and error mapping.
 - **E2E tests** cover the batch data flow, the session control flow and regression.
 
-A task without a test artifact is not ready. A task with a skipped test is not done.
+Every behavior needs a **happy path** and an **unhappy path**. The unhappy path covers
+invalid input, a denied dependency, a missing file, a timeout, a conflict or a malformed
+payload. A task without both is not ready. A task with a skipped test is not done.
 
 ## 3. Inputs
 
