@@ -14,9 +14,21 @@ const (
 	StateFailed   State = "failed"
 )
 
+// CardDecision is the owner's decision on one card.
+type CardDecision string
+
+const (
+	DecisionNone     CardDecision = "none"
+	DecisionRejected CardDecision = "rejected"
+	DecisionAccepted CardDecision = "accepted"
+	DecisionSaved    CardDecision = "saved"
+)
+
 // Card is one video presented for judgment.
 type Card struct {
+	CardID          string
 	VideoID         string
+	ChannelID       string
 	Title           string
 	Channel         string
 	SubscriberCount int
@@ -29,6 +41,12 @@ type Card struct {
 	WhyThisCard     string
 	State           State
 	Reason          string
+	AnalysisID      string
+	Score           float64
+	DiscoveryRank   int
+	Position        int
+	Decision        CardDecision
+	AnalyzedLate    bool
 }
 
 // Validate checks the card fields needed for rendering.
