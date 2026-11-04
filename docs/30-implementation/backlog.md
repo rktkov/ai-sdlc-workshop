@@ -141,3 +141,4 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `S-02` | DONE. Provider B is out of v1. Local server API rejected; managed endpoint is a future preset only. |
 | 2026-11-04 | `S-01` | DONE. Confirmed `LFM2.5-1.2B-Instruct QAD Q4_0` as the v1 default. 2.6B and 3B fail latency; 350M fails quality. |
 | 2026-11-04 | `T-020` | DONE. Taste profile aggregate, validation, SQLite repository and migration v3. Happy and unhappy tests pass. |
+| 2026-11-04 | `T-021` | DONE. Signal scores, ±0.05 weight update, clamp and migration v4. Happy and unhappy tests pass. |

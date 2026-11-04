@@ -378,4 +378,6 @@ Append-only. One line per event, newest last.
   now use `lfm2.5-1.2b-instruct`. `2.6B` and the dense `3B` fail latency on the Intel
   laptop. `350M` fails quality.
 - 2026-11-04 — `T-020` done: `taste.Profile`, validation, SQLite repository and migration
-  v3. Happy and unhappy tests pass. Next task `T-021`.
+  v3. Happy and unhappy tests pass.
+- 2026-11-04 — `T-021` done: signal scores, bounded ±0.05 weight update with clamp and
+  migration v4. Happy and unhappy tests pass. Next task `T-022`.

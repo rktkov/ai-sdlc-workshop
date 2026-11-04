@@ -22,7 +22,7 @@ func NewTasteRepository(db *sql.DB) *TasteRepository {
 
 // RecordGesture stores a signal and an optional cold period in one transaction.
 // It returns false when the gesture already exists.
-func (r *TasteRepository) RecordGesture(ctx context.Context, signal taste.Signal, cold *taste.ColdPeriod) (bool, error) {
+func (r *TasteRepository) RecordGesture(ctx context.Context, signal taste.Signal, cold *taste.ColdPeriod, updates []taste.WeightUpdate) (bool, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, fmt.Errorf("begin gesture: %w", err)
@@ -49,6 +49,34 @@ func (r *TasteRepository) RecordGesture(ctx context.Context, signal taste.Signal
 	); err != nil {
 		_ = tx.Rollback()
 		return false, fmt.Errorf("insert signal: %w", err)
+	}
+
+	for _, score := range signal.ScoredAxes {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO signal_axis_scores
+			(signal_id, axis_name, score) VALUES (?, ?, ?)`,
+			signal.SignalID, score.Axis, score.Score,
+		); err != nil {
+			_ = tx.Rollback()
+			return false, fmt.Errorf("insert score %s: %w", score.Axis, err)
+		}
+	}
+
+	for _, update := range updates {
+		result, err := tx.ExecContext(ctx, `UPDATE taste_axes SET weight = ?
+			WHERE user_id = ? AND name = ?`, update.Weight, signal.UserID, update.Axis)
+		if err != nil {
+			_ = tx.Rollback()
+			return false, fmt.Errorf("update axis %s: %w", update.Axis, err)
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			_ = tx.Rollback()
+			return false, fmt.Errorf("check axis %s: %w", update.Axis, err)
+		}
+		if rows == 0 {
+			_ = tx.Rollback()
+			return false, fmt.Errorf("axis %s is not in the profile", update.Axis)
+		}
 	}
 
 	if cold != nil {

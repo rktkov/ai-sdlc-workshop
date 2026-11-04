@@ -91,7 +91,7 @@ func TestGestureUnhappy(t *testing.T) {
 
 type stubStore struct{}
 
-func (s *stubStore) RecordGesture(context.Context, taste.Signal, *taste.ColdPeriod) (bool, error) {
+func (s *stubStore) RecordGesture(context.Context, taste.Signal, *taste.ColdPeriod, []taste.WeightUpdate) (bool, error) {
 	return true, nil
 }
 

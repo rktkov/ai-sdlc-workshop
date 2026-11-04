@@ -24,8 +24,8 @@ func TestOpenHappy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SchemaVersion: %v", err)
 	}
-	if version != 3 {
-		t.Fatalf("SchemaVersion = %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("SchemaVersion = %d, want 4", version)
 	}
 
 	var journal string
@@ -71,7 +71,7 @@ func TestOpenUnhappy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		if _, err := db.Exec("UPDATE schema_migrations SET version = 999 WHERE version = 3"); err != nil {
+		if _, err := db.Exec("UPDATE schema_migrations SET version = 999 WHERE version = 4"); err != nil {
 			t.Fatalf("set newer schema: %v", err)
 		}
 		_ = db.Close()
@@ -121,8 +121,8 @@ func TestOpenMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SchemaVersion: %v", err)
 	}
-	if version != 3 {
-		t.Fatalf("SchemaVersion = %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("SchemaVersion = %d, want 4", version)
 	}
 }
 
@@ -171,7 +171,7 @@ func TestMigrationFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("migrationFiles: %v", err)
 	}
-	if len(files) != 3 || latest != 3 {
+	if len(files) != 4 || latest != 4 {
 		t.Fatalf("files = %v, latest = %d", files, latest)
 	}
 }

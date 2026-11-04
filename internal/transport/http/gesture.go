@@ -8,13 +8,14 @@ import (
 )
 
 type gestureRequest struct {
-	GestureID string `json:"gesture_id"`
-	CardID    string `json:"card_id"`
-	VideoID   string `json:"video_id"`
-	ChannelID string `json:"channel_id"`
-	Topic     string `json:"topic"`
-	Gesture   string `json:"gesture"`
-	Reason    string `json:"reason"`
+	GestureID  string            `json:"gesture_id"`
+	CardID     string            `json:"card_id"`
+	VideoID    string            `json:"video_id"`
+	ChannelID  string            `json:"channel_id"`
+	Topic      string            `json:"topic"`
+	Gesture    string            `json:"gesture"`
+	Reason     string            `json:"reason"`
+	ScoredAxes []taste.AxisScore `json:"scored_axes"`
 }
 
 type gestureResponse struct {
@@ -38,14 +39,15 @@ func GestureHandler(service *taste.Service, userID string) http.HandlerFunc {
 		}
 
 		result, err := service.Record(r.Context(), taste.Command{
-			GestureID: req.GestureID,
-			UserID:    userID,
-			CardID:    req.CardID,
-			VideoID:   req.VideoID,
-			ChannelID: req.ChannelID,
-			Topic:     req.Topic,
-			Gesture:   taste.Gesture(req.Gesture),
-			Reason:    taste.Reason(req.Reason),
+			GestureID:  req.GestureID,
+			UserID:     userID,
+			CardID:     req.CardID,
+			VideoID:    req.VideoID,
+			ChannelID:  req.ChannelID,
+			Topic:      req.Topic,
+			Gesture:    taste.Gesture(req.Gesture),
+			Reason:     taste.Reason(req.Reason),
+			ScoredAxes: req.ScoredAxes,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -36,16 +37,23 @@ const (
 	ScopeChannel Scope = "channel"
 )
 
+// AxisScore is one analysis score used for the weight update.
+type AxisScore struct {
+	Axis  string
+	Score float64
+}
+
 // Command records one gesture.
 type Command struct {
-	GestureID string
-	UserID    string
-	CardID    string
-	VideoID   string
-	ChannelID string
-	Topic     string
-	Gesture   Gesture
-	Reason    Reason
+	GestureID  string
+	UserID     string
+	CardID     string
+	VideoID    string
+	ChannelID  string
+	Topic      string
+	Gesture    Gesture
+	Reason     Reason
+	ScoredAxes []AxisScore
 }
 
 // Signal is one immutable preference record.
@@ -59,6 +67,7 @@ type Signal struct {
 	Topic      string
 	Gesture    Gesture
 	Reason     Reason
+	ScoredAxes []AxisScore
 	OccurredAt time.Time
 }
 
@@ -81,14 +90,26 @@ type Result struct {
 	SignalID  string
 }
 
-// Store persists a signal and an optional cold period in one transaction.
+// WeightUpdate is one axis change calculated by the service.
+type WeightUpdate struct {
+	Axis   string
+	Weight float64
+}
+
+// Store persists a signal, its scores, the weight updates and an optional cold period.
 type Store interface {
-	RecordGesture(ctx context.Context, signal Signal, cold *ColdPeriod) (bool, error)
+	RecordGesture(ctx context.Context, signal Signal, cold *ColdPeriod, updates []WeightUpdate) (bool, error)
+}
+
+// ProfileReader loads the profile used for the weight update.
+type ProfileReader interface {
+	Get(ctx context.Context, userID string) (Profile, error)
 }
 
 // Service records gestures.
 type Service struct {
 	Store    Store
+	Profiles ProfileReader
 	Now      func() time.Time
 	Duration time.Duration
 }
@@ -121,6 +142,7 @@ func (s *Service) Record(ctx context.Context, cmd Command) (Result, error) {
 		Topic:      cmd.Topic,
 		Gesture:    cmd.Gesture,
 		Reason:     cmd.Reason,
+		ScoredAxes: cmd.ScoredAxes,
 		OccurredAt: now,
 	}
 
@@ -139,11 +161,60 @@ func (s *Service) Record(ctx context.Context, cmd Command) (Result, error) {
 		}
 	}
 
-	created, err := s.Store.RecordGesture(ctx, signal, cold)
+	updates, err := s.weightUpdates(ctx, cmd)
+	if err != nil {
+		return Result{}, err
+	}
+
+	created, err := s.Store.RecordGesture(ctx, signal, cold, updates)
 	if err != nil {
 		return Result{}, err
 	}
 	return Result{Applied: true, Duplicate: !created, SignalID: signal.SignalID}, nil
+}
+
+func (s *Service) weightUpdates(ctx context.Context, cmd Command) ([]WeightUpdate, error) {
+	if s.Profiles == nil || len(cmd.ScoredAxes) == 0 {
+		return nil, nil
+	}
+	profile, err := s.Profiles.Get(ctx, cmd.UserID)
+	if err != nil {
+		return nil, err
+	}
+	scores := map[string]float64{}
+	for _, score := range cmd.ScoredAxes {
+		if score.Score >= 0 && score.Score <= 1 {
+			scores[normalizeName(score.Axis)] = score.Score
+		}
+	}
+
+	delta := 0.05
+	if cmd.Gesture == GestureLeft {
+		delta = -0.05
+	}
+
+	var updates []WeightUpdate
+	for _, axis := range profile.Axes {
+		score, ok := scores[normalizeName(axis.Name)]
+		if !ok || score == 0 {
+			continue
+		}
+		weight := math.Round(clamp(axis.Weight+delta)*10000) / 10000
+		if weight != axis.Weight {
+			updates = append(updates, WeightUpdate{Axis: axis.Name, Weight: weight})
+		}
+	}
+	return updates, nil
+}
+
+func clamp(value float64) float64 {
+	if value < 0 {
+		return 0
+	}
+	if value > 1 {
+		return 1
+	}
+	return value
 }
 
 func (c Command) validate() error {

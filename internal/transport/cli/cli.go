@@ -158,7 +158,10 @@ func runServeWith(ctx context.Context, args []string, getenv func(string) string
 		_, _ = fmt.Fprintln(stderr, "warning: binding to a non-loopback address; the API token is the only control")
 	}
 
-	tasteService := &taste.Service{Store: sqlite.NewTasteRepository(db)}
+	tasteService := &taste.Service{
+		Store:    sqlite.NewTasteRepository(db),
+		Profiles: sqlite.NewProfileRepository(db),
+	}
 	handler := httpapi.HandlerWithGestureRemote(token, Version, schemaVersion, httpapi.GestureHandler(tasteService, "owner"), allowRemote)
 
 	server := &http.Server{

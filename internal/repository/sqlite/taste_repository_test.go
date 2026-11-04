@@ -181,3 +181,107 @@ func TestRecordGestureStoreErrors(t *testing.T) {
 		}
 	})
 }
+
+func TestRecordGestureUpdatesWeights(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	profile := taste.Profile{
+		UserID:        "owner",
+		RubricVersion: "v1",
+		Axes: []taste.Axis{
+			{Name: "depth", Weight: 0.5, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+			{Name: "novelty", Weight: 0.98, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+			{Name: "clarity", Weight: 0.5, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+		},
+		Interests: []string{"ai-agents"},
+	}
+	if err := NewProfileRepository(db).Save(context.Background(), profile); err != nil {
+		t.Fatalf("Save profile: %v", err)
+	}
+
+	service := &taste.Service{
+		Store:    NewTasteRepository(db),
+		Profiles: NewProfileRepository(db),
+	}
+	cmd := taste.Command{
+		GestureID: "g", UserID: "owner", CardID: "c", VideoID: "v", ChannelID: "ch", Topic: "t",
+		Gesture: taste.GestureRight,
+		ScoredAxes: []taste.AxisScore{
+			{Axis: "depth", Score: 0.8},
+			{Axis: "novelty", Score: 0.9},
+		},
+	}
+	if _, err := service.Record(context.Background(), cmd); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	got, err := NewProfileRepository(db).Get(context.Background(), "owner")
+	if err != nil {
+		t.Fatalf("Get profile: %v", err)
+	}
+	if got.Axes[0].Weight != 0.55 || got.Axes[1].Weight != 1.0 {
+		t.Fatalf("weights = %v, want 0.55 and 1.0", got.Axes)
+	}
+
+	var scores int
+	if err := db.QueryRow("SELECT count(*) FROM signal_axis_scores").Scan(&scores); err != nil {
+		t.Fatalf("count scores: %v", err)
+	}
+	if scores != 2 {
+		t.Fatalf("scores = %d, want 2", scores)
+	}
+}
+
+func TestRecordGestureScoreError(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec("DROP TABLE signal_axis_scores"); err != nil {
+		t.Fatalf("drop scores: %v", err)
+	}
+
+	service := &taste.Service{Store: NewTasteRepository(db)}
+	cmd := taste.Command{
+		GestureID: "g", UserID: "owner", CardID: "c", VideoID: "v", ChannelID: "ch", Topic: "t",
+		Gesture:    taste.GestureRight,
+		ScoredAxes: []taste.AxisScore{{Axis: "depth", Score: 0.8}},
+	}
+	if _, err := service.Record(context.Background(), cmd); err == nil {
+		t.Fatal("Record(dropped scores) = nil, want an error")
+	}
+}
+
+type ghostProfile struct{}
+
+func (ghostProfile) Get(context.Context, string) (taste.Profile, error) {
+	return taste.Profile{
+		UserID: "owner",
+		Axes: []taste.Axis{
+			{Name: "ghost", Weight: 0.5, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+		},
+	}, nil
+}
+
+func TestRecordGestureMissingAxis(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	service := &taste.Service{Store: NewTasteRepository(db), Profiles: ghostProfile{}}
+	cmd := taste.Command{
+		GestureID: "g", UserID: "owner", CardID: "c", VideoID: "v", ChannelID: "ch", Topic: "t",
+		Gesture:    taste.GestureRight,
+		ScoredAxes: []taste.AxisScore{{Axis: "ghost", Score: 0.8}},
+	}
+	if _, err := service.Record(context.Background(), cmd); err == nil {
+		t.Fatal("Record(missing axis) = nil, want an error")
+	}
+}
