@@ -13,10 +13,11 @@
 | `T-002` | DONE | 2026-11-04 | Config validation, structured logger and redacted output. Happy and unhappy tests pass. |
 | `T-003` | DONE | 2026-11-04 | SQLite open, pragmas, embedded migration, backup and newer-schema refusal. Happy and unhappy tests pass. |
 | `T-004` | DONE | 2026-11-04 | HTTP health handler, bearer token, loopback guard and token file. Happy and unhappy tests pass. |
+| `T-005` | DONE | 2026-11-04 | CLI dispatch, `doctor`, `serve`, version and help. Exit codes and remote warning tested. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. Next task: `T-005`.
+Definition of Done passes and the backlog is updated. Next task: `T-006`.
 
 ## Sprint 1
 

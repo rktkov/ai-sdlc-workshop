@@ -105,3 +105,17 @@ func TestLoadOrCreateToken(t *testing.T) {
 		t.Fatal("second call returned a different token")
 	}
 }
+
+func TestAllowRemote(t *testing.T) {
+	handler := HandlerWithRemote("secret", "dev", 1, true)
+	req := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
+	req.RemoteAddr = "10.0.0.1:1234"
+	req.Header.Set("Authorization", "Bearer secret")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}

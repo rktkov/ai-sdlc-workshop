@@ -13,8 +13,16 @@ import (
 
 // Handler returns the local API handler.
 func Handler(token, version string, schemaVersion int) http.Handler {
+	return HandlerWithRemote(token, version, schemaVersion, false)
+}
+
+// HandlerWithRemote returns the API handler. A remote bind skips the loopback guard.
+func HandlerWithRemote(token, version string, schemaVersion int, allowRemote bool) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", health(version, schemaVersion))
+	if allowRemote {
+		return auth(token, mux)
+	}
 	return loopback(auth(token, mux))
 }
 

@@ -135,3 +135,4 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `T-002` | DONE. Config load and validation, structured logger, redacted config. Happy and unhappy tests pass. |
 | 2026-11-04 | `T-003` | DONE. SQLite, schema v1, embedded migrations, backup and newer-schema refusal. Happy and unhappy tests pass. |
 | 2026-11-04 | `T-004` | DONE. HTTP health handler, bearer token, loopback guard and `0600` token file. Happy and unhappy tests pass. |
+| 2026-11-04 | `T-005` | DONE. CLI dispatch, `doctor`, `serve`, `--allow-remote` warning, version and help. Happy and unhappy tests pass. |

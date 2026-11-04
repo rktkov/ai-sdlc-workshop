@@ -360,4 +360,7 @@ Append-only. One line per event, newest last.
   `synchronous=FULL`, one writer, embedded migration, backup before apply and a refusal
   for a newer schema. Happy and unhappy tests pass.
 - 2026-11-04 — `T-004` done: `internal/transport/http`. Health handler, bearer token,
-  loopback guard and a `0600` token file. Happy and unhappy tests pass. Next task `T-005`.
+  loopback guard and a `0600` token file. Happy and unhappy tests pass.
+- 2026-11-04 — `T-005` done: `cmd/ytfeed` and `internal/transport/cli`. `doctor` reaches
+  the server, `serve` binds locally, `--allow-remote` warns, exit codes follow `CLI-6`.
+  Happy and unhappy tests pass. Next task `T-006`.
