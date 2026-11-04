@@ -358,4 +358,6 @@ Append-only. One line per event, newest last.
   unhappy tests pass.
 - 2026-11-04 — `T-003` done: `internal/storage` and `migrations/`. WAL, foreign keys,
   `synchronous=FULL`, one writer, embedded migration, backup before apply and a refusal
-  for a newer schema. Happy and unhappy tests pass. Next task `T-004`.
+  for a newer schema. Happy and unhappy tests pass.
+- 2026-11-04 — `T-004` done: `internal/transport/http`. Health handler, bearer token,
+  loopback guard and a `0600` token file. Happy and unhappy tests pass. Next task `T-005`.

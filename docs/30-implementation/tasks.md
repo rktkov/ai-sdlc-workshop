@@ -12,10 +12,11 @@
 | `T-001a` | DONE | 2026-11-04 | Test harness, contract fixtures and E2E fakes. All targets pass. |
 | `T-002` | DONE | 2026-11-04 | Config validation, structured logger and redacted output. Happy and unhappy tests pass. |
 | `T-003` | DONE | 2026-11-04 | SQLite open, pragmas, embedded migration, backup and newer-schema refusal. Happy and unhappy tests pass. |
+| `T-004` | DONE | 2026-11-04 | HTTP health handler, bearer token, loopback guard and token file. Happy and unhappy tests pass. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. Next task: `T-004`.
+Definition of Done passes and the backlog is updated. Next task: `T-005`.
 
 ## Sprint 1
 
@@ -25,8 +26,8 @@ Definition of Done passes and the backlog is updated. Next task: `T-004`.
 | `T-001a` | Test harness, fakes and golden fixtures | E1 | T-001 | foundation | M | `make test-contract` and `make test-e2e` run. Fakes are deterministic. |
 | `T-002` | Config, logger, `doctor` stub | E1 | T-001a | foundation | S | Bad config fails fast. Logs are structured. |
 | `T-003` | SQLite, schema v1, migrations, backup | E1 | T-001 | storage | M | Fresh start creates the DB. A pending migration takes a backup. |
-| `T-004` | HTTP server, token, loopback guard | E1 | T-002, T-003 | transport | M | `GET /v1/health` works with a bearer token. A second bind mode warns. |
-| `T-005` | CLI client and dispatch | E1 | T-004 | transport | M | `ytfeed doctor` reaches the server. Exit codes follow `CLI-6`. |
+| `T-004` | HTTP server, token, loopback guard | E1 | T-002, T-003 | transport | M | `GET /v1/health` works with a bearer token. A non-loopback caller is rejected. |
+| `T-005` | CLI client and dispatch | E1 | T-004 | transport | M | `ytfeed doctor` reaches the server. Exit codes follow `CLI-6`. `--allow-remote` warns. |
 | `T-006` | Card model and hardcoded card | E5 | T-005 | `feed`, transport | S | One card renders in the `CLI-13` order. |
 | `T-007` | One gesture persisted end to end | E3/E5 | T-003, T-006 | `taste`, `feed` | S | A left-swipe stores a signal and a cold period before the card advances. |
 | `S-01` | Model comparison (`Q1`) | E4 | — | `analysis` | M | A report names the default model and the schema failure rate. |

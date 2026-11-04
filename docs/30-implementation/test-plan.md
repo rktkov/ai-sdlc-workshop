@@ -95,14 +95,14 @@ type. `Gate` means the task only changes the build or harness.
 | `T-001a` | Harness self-test | Golden fixtures load | Harness smoke |
 | `T-002` | `UT-002` config validation | `CT-01` | — |
 | `T-003` | `UT-003` schema, backup | — | `E2E-02` |
-| `T-004` | `UT-004` token, loopback | `CT-01`, `CT-02` | — |
-| `T-005` | — | `CT-08` exit mapping | `E2E-01` |
-| `T-006` | `UT-006` card order | `CT-03` | `E2E-02` |
-| `T-007` | `UT-007` signal and cold period | `CT-04` | `E2E-03` |
-| `T-010` | `UT-010` PKCE and state | `CT-02` | `E2E-01` |
-| `T-011` | `UT-011` token lifecycle | `CT-02` | `E2E-01` |
-| `T-012` | `UT-012` import idempotency | `CT-02` | `E2E-01` |
-| `T-013` | `UT-013` interest validation | `CT-02` | `E2E-01` |
+| `T-004` | `UT-004` token, loopback | `CT-01` | — |
+| `T-005` | — | `CT-08` exit mapping | — |
+| `T-006` | `UT-006` card order | — | — |
+| `T-007` | `UT-007` signal and cold period | — | — |
+| `T-010` | `UT-010` PKCE and state | `CT-02` | — |
+| `T-011` | `UT-011` token lifecycle | `CT-02` | — |
+| `T-012` | `UT-012` import idempotency | `CT-02` | — |
+| `T-013` | `UT-013` interest validation | `CT-02` | — |
 | `T-014` | `UT-014` onboarding steps | `CT-02` | `E2E-01` |
 | `T-020` | `UT-020` profile invariants | — | — |
 | `T-021` | `UT-021` signal and weight | `CT-04` | `E2E-03` |
