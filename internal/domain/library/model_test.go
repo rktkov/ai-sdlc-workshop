@@ -273,3 +273,53 @@ func TestList(t *testing.T) {
 		t.Fatalf("list = %+v", list)
 	}
 }
+
+type fakePlayer struct {
+	path  string
+	calls int
+	err   error
+}
+
+func (f *fakePlayer) Open(_ context.Context, path string) error {
+	f.calls++
+	f.path = path
+	return f.err
+}
+
+func TestOpenHappy(t *testing.T) {
+	repo := newFakeRepo()
+	files := &fakeFiles{bytes: 10, dir: "/library"}
+	player := &fakePlayer{}
+	service := &Service{Repo: repo, Files: files, Player: player}
+	entry := savedEntry()
+	entry.State = StateDownloaded
+	entry.FileExtension = "mp4"
+	entry.FileBytes = 10
+	entry.DownloadedAt = time.Now().UTC()
+	repo.items[key("owner", "v1")] = entry
+
+	if err := service.Open(context.Background(), "owner", "v1"); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if player.calls != 1 || player.path != "/library/v1.mp4" {
+		t.Fatalf("player = %+v", player)
+	}
+}
+
+func TestOpenUnhappy(t *testing.T) {
+	repo := newFakeRepo()
+	if _, err := (&Service{Repo: repo, Files: &fakeFiles{}, Player: &fakePlayer{}}).Save(context.Background(), savedEntry()); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	service := &Service{Repo: repo, Files: &fakeFiles{statErr: errors.New("missing")}, Player: &fakePlayer{}}
+	if err := service.Open(context.Background(), "owner", "v1"); err == nil {
+		t.Fatal("Open(saved) = nil, want an error")
+	}
+	service.Files = &fakeFiles{bytes: 10}
+	if err := service.Open(context.Background(), "owner", "v1"); err == nil {
+		t.Fatal("Open(saved with file) = nil, want an error")
+	}
+	if err := (&Service{}).Open(context.Background(), "owner", "v1"); err == nil {
+		t.Fatal("Open(nil) = nil, want an error")
+	}
+}

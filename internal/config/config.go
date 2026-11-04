@@ -17,6 +17,7 @@ type Config struct {
 	YouTube  YouTubeConfig
 	Analysis AnalysisConfig
 	LLM      LLMConfig
+	Playback PlaybackConfig
 	Storage  StorageConfig
 }
 
@@ -54,6 +55,11 @@ type LLMConfig struct {
 	APIKey   string
 	JSONMode bool
 	Timeout  time.Duration
+}
+
+// PlaybackConfig controls local playback.
+type PlaybackConfig struct {
+	PlayerCmd string
 }
 
 // StorageConfig controls local state.
@@ -107,7 +113,8 @@ func defaultConfig(getenv func(string) string) Config {
 			JSONMode: true,
 			Timeout:  60 * time.Second,
 		},
-		Storage: StorageConfig{DataDir: valueOr(getenv, "YTFEED_DATA_DIR", "./data")},
+		Playback: PlaybackConfig{PlayerCmd: strings.TrimSpace(getenv("PLAYER_CMD"))},
+		Storage:  StorageConfig{DataDir: valueOr(getenv, "YTFEED_DATA_DIR", "./data")},
 	}
 }
 
@@ -224,6 +231,7 @@ func (c Config) Redacted() map[string]string {
 		"transcript_max_bytes":      strconv.FormatInt(c.Analysis.MaxBytes, 10),
 		"ytdlp_bin":                 c.Analysis.YTDLP,
 		"llm_timeout":               c.LLM.Timeout.String(),
+		"player_cmd":                c.Playback.PlayerCmd,
 		"data_dir":                  c.Storage.DataDir,
 	}
 }

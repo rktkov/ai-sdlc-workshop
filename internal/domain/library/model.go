@@ -99,11 +99,17 @@ type Downloader interface {
 	Download(ctx context.Context, videoID, directory string) (DownloadResult, error)
 }
 
+// Player opens one local media file.
+type Player interface {
+	Open(ctx context.Context, path string) error
+}
+
 // Service applies library use cases.
 type Service struct {
 	Repo       Repository
 	Files      FileStore
 	Downloader Downloader
+	Player     Player
 	Now        func() time.Time
 }
 
@@ -176,6 +182,24 @@ func (s *Service) Remove(ctx context.Context, userID, videoID string) error {
 		}
 	}
 	return s.Repo.Remove(ctx, userID, videoID)
+}
+
+// Open checks the file and asks the player to open it.
+func (s *Service) Open(ctx context.Context, userID, videoID string) error {
+	if s.Repo == nil || s.Files == nil || s.Player == nil {
+		return errors.New("library service is not configured")
+	}
+	entry, err := s.Repo.Get(ctx, userID, videoID)
+	if err != nil {
+		return err
+	}
+	if entry.State != StateDownloaded {
+		return errors.New("video is not downloaded")
+	}
+	if _, err := s.Files.Stat(videoID, entry.FileExtension); err != nil {
+		return err
+	}
+	return s.Player.Open(ctx, s.Files.Path(videoID, entry.FileExtension))
 }
 
 // List returns the library ordered by save time.
