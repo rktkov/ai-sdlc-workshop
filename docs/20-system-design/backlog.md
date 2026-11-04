@@ -377,3 +377,5 @@ Append-only. One line per event, newest last.
   `LFM2.5-1.2B-Instruct QAD Q4_0` is the v1 default. `.env.example` and `internal/config`
   now use `lfm2.5-1.2b-instruct`. `2.6B` and the dense `3B` fail latency on the Intel
   laptop. `350M` fails quality.
+- 2026-11-04 — `T-020` done: `taste.Profile`, validation, SQLite repository and migration
+  v3. Happy and unhappy tests pass. Next task `T-021`.
