@@ -13,6 +13,7 @@ import (
 type Config struct {
 	App     AppConfig
 	Feed    FeedConfig
+	YouTube YouTubeConfig
 	LLM     LLMConfig
 	Storage StorageConfig
 }
@@ -26,6 +27,12 @@ type AppConfig struct {
 // FeedConfig controls feed composition.
 type FeedConfig struct {
 	Size int
+}
+
+// YouTubeConfig controls the optional Google integrations.
+type YouTubeConfig struct {
+	OAuthClientFile string
+	APIKey          string
 }
 
 // LLMConfig controls the OpenAI-compatible endpoint.
@@ -55,6 +62,10 @@ func Load(getenv func(string) string) (Config, error) {
 		},
 		Feed: FeedConfig{
 			Size: 20,
+		},
+		YouTube: YouTubeConfig{
+			OAuthClientFile: strings.TrimSpace(getenv("GOOGLE_OAUTH_CLIENT_FILE")),
+			APIKey:          strings.TrimSpace(getenv("YOUTUBE_API_KEY")),
 		},
 		LLM: LLMConfig{
 			BaseURL:  valueOr(getenv, "LLM_BASE_URL", "http://localhost:11434/v1"),
@@ -118,13 +129,15 @@ func (c Config) Redacted() map[string]string {
 		key = c.LLM.APIKey
 	}
 	return map[string]string{
-		"log_env":      c.App.LogEnv,
-		"log_level":    c.App.LogLevel,
-		"feed_size":    strconv.Itoa(c.Feed.Size),
-		"llm_base_url": c.LLM.BaseURL,
-		"llm_model":    c.LLM.Model,
-		"llm_api_key":  key,
-		"data_dir":     c.Storage.DataDir,
+		"log_env":                   c.App.LogEnv,
+		"log_level":                 c.App.LogLevel,
+		"feed_size":                 strconv.Itoa(c.Feed.Size),
+		"llm_base_url":              c.LLM.BaseURL,
+		"llm_model":                 c.LLM.Model,
+		"llm_api_key":               key,
+		"youtube_oauth_client_file": c.YouTube.OAuthClientFile,
+		"youtube_api_key":           redactSecret(c.YouTube.APIKey),
+		"data_dir":                  c.Storage.DataDir,
 	}
 }
 
@@ -153,4 +166,11 @@ func validURL(raw string) bool {
 		return false
 	}
 	return parsed.Host != ""
+}
+
+func redactSecret(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	return "[redacted]"
 }

@@ -10,7 +10,7 @@
 ```
 Read execution/docs/20-system-design/handoff.md in full and follow it as your
 operating brief. Work from execution/docs/30-implementation/backlog.md and
-tasks.md. Start with task T-010. T-010 needs Google OAuth credentials.
+tasks.md. Start with task T-011. T-010 OAuth is implemented; its real consent needs the owner.
 Do not write production code before its happy and unhappy tests exist and fail.
 ```
 
@@ -71,7 +71,7 @@ Done 39 | In review 0 | In progress 0 | Blocked 0 | Remaining 0
   are confirmed.
 - **Assembly is complete.** `ARCH-501`…`ARCH-505` are `DONE`. The final gate passed.
 - **Handoff is complete.** `ARCH-601` is `DONE`. The implementation backlog is active.
-  Next: `T-010` OAuth. `S-03` is DONE: 510 units per batch. `OQ-21` resolved: five searches per batch.
+  Next: `T-011` token store. `T-010` OAuth is implemented; the real consent timed out and needs the owner. `S-03` is DONE: 510 units per batch. `OQ-21` resolved: five searches per batch.
 
 **Documentation language.** All documents use ASD-STE100 (`DOC-20`). The pre-STE originals
 are archived at [`_archive/pre-ste-2026-11-03/`](../_archive/pre-ste-2026-11-03/). The

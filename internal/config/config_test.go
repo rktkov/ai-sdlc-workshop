@@ -32,18 +32,23 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Storage.DataDir != "./data" {
 		t.Fatalf("Storage.DataDir = %q", cfg.Storage.DataDir)
 	}
+	if cfg.YouTube.OAuthClientFile != "" || cfg.YouTube.APIKey != "" {
+		t.Fatalf("YouTube = %+v, want empty optional values", cfg.YouTube)
+	}
 }
 
 func TestLoadOverrides(t *testing.T) {
 	env := map[string]string{
-		"LOG_ENV":         "production",
-		"LOG_LEVEL":       "debug",
-		"FEED_SIZE":       "12",
-		"LLM_BASE_URL":    "http://127.0.0.1:8080/v1",
-		"LLM_MODEL":       "test-model",
-		"LLM_API_KEY":     "secret",
-		"LLM_JSON_MODE":   "false",
-		"YTFEED_DATA_DIR": "/tmp/ytfeed-test",
+		"LOG_ENV":                  "production",
+		"LOG_LEVEL":                "debug",
+		"FEED_SIZE":                "12",
+		"LLM_BASE_URL":             "http://127.0.0.1:8080/v1",
+		"LLM_MODEL":                "test-model",
+		"LLM_API_KEY":              "secret",
+		"LLM_JSON_MODE":            "false",
+		"YTFEED_DATA_DIR":          "/tmp/ytfeed-test",
+		"GOOGLE_OAUTH_CLIENT_FILE": "/tmp/client.json",
+		"YOUTUBE_API_KEY":          "youtube-key",
 	}
 
 	cfg, err := Load(func(key string) string { return env[key] })
@@ -62,6 +67,9 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if cfg.Storage.DataDir != "/tmp/ytfeed-test" {
 		t.Fatalf("Storage.DataDir = %q", cfg.Storage.DataDir)
+	}
+	if cfg.YouTube.OAuthClientFile != "/tmp/client.json" || cfg.YouTube.APIKey != "youtube-key" {
+		t.Fatalf("YouTube = %+v", cfg.YouTube)
 	}
 }
 
@@ -104,6 +112,35 @@ func TestRedacted(t *testing.T) {
 	for _, value := range got {
 		if strings.Contains(value, "super-secret") {
 			t.Fatal("redacted output contains the secret")
+		}
+	}
+}
+
+func TestRedactedYouTube(t *testing.T) {
+	cfg, err := Load(func(key string) string {
+		switch key {
+		case "GOOGLE_OAUTH_CLIENT_FILE":
+			return "/tmp/client.json"
+		case "YOUTUBE_API_KEY":
+			return "super-secret-youtube"
+		default:
+			return ""
+		}
+	})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	got := cfg.Redacted()
+	if got["youtube_oauth_client_file"] != "/tmp/client.json" {
+		t.Fatalf("youtube_oauth_client_file = %q", got["youtube_oauth_client_file"])
+	}
+	if got["youtube_api_key"] != "[redacted]" {
+		t.Fatalf("youtube_api_key = %q", got["youtube_api_key"])
+	}
+	for _, value := range got {
+		if strings.Contains(value, "super-secret-youtube") {
+			t.Fatal("redacted output contains the YouTube key")
 		}
 	}
 }

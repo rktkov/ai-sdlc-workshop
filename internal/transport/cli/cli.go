@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rktkov/ytfeed/internal/config"
+	"github.com/rktkov/ytfeed/internal/domain/identity"
 	"github.com/rktkov/ytfeed/internal/domain/taste"
 	"github.com/rktkov/ytfeed/internal/repository/sqlite"
 	"github.com/rktkov/ytfeed/internal/storage"
@@ -40,6 +42,8 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 
 	switch args[0] {
+	case "auth":
+		return runAuth(ctx, args[1:], getenv, stdout, stderr)
 	case "doctor":
 		return runDoctor(ctx, getenv, stdout, stderr, baseURL)
 	case "serve":
@@ -53,6 +57,97 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	default:
 		_, _ = fmt.Fprintf(stderr, "ytfeed: unknown command %q\n", args[0])
 		return 2
+	}
+}
+
+func runAuth(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		_, _ = fmt.Fprintln(stderr, "ytfeed auth: command required (login)")
+		return 2
+	}
+	switch args[0] {
+	case "login":
+		return runAuthLogin(ctx, args[1:], getenv, stdout, stderr)
+	default:
+		_, _ = fmt.Fprintf(stderr, "ytfeed auth: unknown command %q\n", args[0])
+		return 2
+	}
+}
+
+func runAuthLogin(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
+	return runAuthLoginWith(ctx, args, getenv, stdout, stderr, func(ctx context.Context, service identity.Service) (identity.Token, error) {
+		return service.Authorize(ctx)
+	})
+}
+
+func runAuthLoginWith(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer, authorize func(context.Context, identity.Service) (identity.Token, error)) int {
+	flags := flag.NewFlagSet("auth login", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	noBrowser := flags.Bool("no-browser", false, "print the URL instead of opening the browser")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	if flags.NArg() > 0 {
+		_, _ = fmt.Fprintf(stderr, "ytfeed auth login: unexpected argument %q\n", flags.Arg(0))
+		return 2
+	}
+
+	cfg, err := config.Load(getenv)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 2
+	}
+	if cfg.YouTube.OAuthClientFile == "" {
+		_, _ = fmt.Fprintln(stderr, "ytfeed auth login: GOOGLE_OAUTH_CLIENT_FILE is not set")
+		return 2
+	}
+	client, err := identity.LoadClient(cfg.YouTube.OAuthClientFile)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "ytfeed auth login: %v\n", err)
+		return 2
+	}
+
+	service := identity.Service{
+		Client: client,
+		OnAuthURL: func(url string) {
+			_, _ = fmt.Fprintf(stderr, "open this URL to authorize ytfeed:\n%s\n", url)
+		},
+	}
+	if *noBrowser {
+		service.OpenBrowser = func(string) error { return nil }
+	}
+
+	token, err := authorize(ctx, service)
+	if err != nil {
+		return authError(stderr, err)
+	}
+	_, _ = fmt.Fprintf(stdout, "authorized scope=%s expires_at=%s fingerprint=%s\n",
+		token.Scope, token.ExpiresAt.UTC().Format(time.RFC3339), token.Fingerprint())
+	return 0
+}
+
+func authError(stderr io.Writer, err error) int {
+	switch {
+	case errors.Is(err, identity.ErrConsentDenied):
+		_, _ = fmt.Fprintln(stderr, "ytfeed auth login: authorization denied")
+		return 2
+	case errors.Is(err, identity.ErrStateMismatch):
+		_, _ = fmt.Fprintln(stderr, "ytfeed auth login: authorization failed: state mismatch")
+		return 2
+	case errors.Is(err, identity.ErrUnauthorized):
+		_, _ = fmt.Fprintln(stderr, "ytfeed auth login: authorization rejected; run `ytfeed auth login` again")
+		return 2
+	case errors.Is(err, identity.ErrTimeout):
+		_, _ = fmt.Fprintln(stderr, "ytfeed auth login: authorization timed out")
+		return 2
+	case errors.Is(err, context.Canceled):
+		return 130
+	default:
+		_, _ = fmt.Fprintf(stderr, "ytfeed auth login: authorization failed: %v\n", err)
+		return 1
 	}
 }
 
@@ -180,6 +275,7 @@ func printHelp(w io.Writer) {
 	var buf bytes.Buffer
 	buf.WriteString("ytfeed — local YouTube feed composer\n\n")
 	buf.WriteString("Usage:\n")
+	buf.WriteString("  ytfeed auth login        Authorize YouTube access\n")
 	buf.WriteString("  ytfeed doctor            Check the local server\n")
 	buf.WriteString("  ytfeed serve             Run the local API server\n")
 	buf.WriteString("  ytfeed serve --allow-remote  Bind to a non-loopback address\n")

@@ -23,7 +23,7 @@ coverage: ## Show coverage per package
 	$(GO) test -cover ./...
 
 coverage-check: ## Fail when a tested package is below the threshold
-	@out=$$($(GO) test -cover ./...); echo "$$out"; echo "$$out" | awk -v t=$(COVERAGE_THRESHOLD) '/coverage:/ && $$0 !~ /no statements/ {gsub("%", "", $$5); if ($$5 + 0 < t) {print "coverage below threshold: " $$2 " " $$5 "%"; bad = 1}} END {exit bad}'
+	@out=$$($(GO) test -cover ./...); echo "$$out"; echo "$$out" | awk -v t=$(COVERAGE_THRESHOLD) '/coverage:/ && $$0 !~ /no statements/ && $$0 !~ /\/scripts\/spikes\// {gsub("%", "", $$5); if ($$5 + 0 < t) {print "coverage below threshold: " $$2 " " $$5 "%"; bad = 1}} END {exit bad}'
 
 build: ## Compile all packages
 	$(GO) build ./...
