@@ -143,3 +143,4 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `T-020` | DONE. Taste profile aggregate, validation, SQLite repository and migration v3. Happy and unhappy tests pass. |
 | 2026-11-04 | `T-021` | DONE. Signal scores, ±0.05 weight update, clamp and migration v4. Happy and unhappy tests pass. |
 | 2026-11-04 | `T-022` | DONE. Cold-period validation, active query, find by target and refresh. Expired rows stay. |
+| 2026-11-04 | `T-023` | DONE. Reason picker keys 1–4, Enter default, Esc other and scope preview. |

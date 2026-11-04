@@ -382,4 +382,6 @@ Append-only. One line per event, newest last.
 - 2026-11-04 — `T-021` done: signal scores, bounded ±0.05 weight update with clamp and
   migration v4. Happy and unhappy tests pass.
 - 2026-11-04 — `T-022` done: cold-period validation, active query, find by target and
-  refresh. Expired rows stay. Happy and unhappy tests pass. Next task `T-023`.
+  refresh. Expired rows stay. Happy and unhappy tests pass.
+- 2026-11-04 — `T-023` done: reason picker keys 1–4, Enter default, Esc other, scope
+  preview and invalid-key error. Next task `T-024`.

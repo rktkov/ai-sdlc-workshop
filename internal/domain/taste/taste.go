@@ -289,11 +289,19 @@ func validReason(reason Reason) bool {
 	}
 }
 
-func scopeFor(reason Reason, cmd Command) (Scope, string) {
+// ScopeForReason returns the cold-period scope for a rejection reason.
+func ScopeForReason(reason Reason) Scope {
 	switch reason {
 	case ReasonValueMisaligned, ReasonMarketing:
-		return ScopeChannel, cmd.ChannelID
+		return ScopeChannel
 	default:
-		return ScopeTopic, cmd.Topic
+		return ScopeTopic
 	}
+}
+
+func scopeFor(reason Reason, cmd Command) (Scope, string) {
+	if ScopeForReason(reason) == ScopeChannel {
+		return ScopeChannel, cmd.ChannelID
+	}
+	return ScopeTopic, cmd.Topic
 }
