@@ -363,4 +363,6 @@ Append-only. One line per event, newest last.
   loopback guard and a `0600` token file. Happy and unhappy tests pass.
 - 2026-11-04 — `T-005` done: `cmd/ytfeed` and `internal/transport/cli`. `doctor` reaches
   the server, `serve` binds locally, `--allow-remote` warns, exit codes follow `CLI-6`.
-  Happy and unhappy tests pass. Next task `T-006`.
+  Happy and unhappy tests pass.
+- 2026-11-04 — `T-006` done: `internal/domain/feed` and the CLI card renderer. Card
+  validation and `CLI-13` order are tested. Happy and unhappy tests pass. Next task `T-007`.
