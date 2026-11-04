@@ -1,0 +1,8 @@
+{
+  "axes": [
+    {"name": "depth", "description": "Substance beyond the title."},
+    {"name": "novelty", "description": "New information or a new angle."},
+    {"name": "signal-to-noise", "description": "Useful content per minute."},
+    {"name": "practical-value", "description": "Something the viewer can use."}
+  ]
+}

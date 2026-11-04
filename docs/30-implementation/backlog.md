@@ -139,4 +139,4 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `T-006` | DONE. Card model, validation and text renderer in `CLI-13` order. Happy and unhappy tests pass. |
 | 2026-11-04 | `T-007` | DONE. Gesture endpoint, taste service and SQLite repository. Signal and cold period commit together; retry is idempotent. |
 | 2026-11-04 | `S-02` | DONE. Provider B is out of v1. Local server API rejected; managed endpoint is a future preset only. |
-| 2026-11-04 | `S-01` | BLOCKED. Model comparison plan ready. Needs approval for `llama.cpp` and about 12 GB of models. |
+| 2026-11-04 | `S-01` | REVIEW. Smoke complete. 1.2B passes schema, rubric and latency; 2.6B and 3B fail latency; 350M fails quality. |

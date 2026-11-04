@@ -373,6 +373,6 @@ Append-only. One line per event, newest last.
   local server API is session-based and experimental, not OpenAI-compatible. The owner
   put provider B out of v1; the managed endpoint stays a future preset only. `OQ-06`
   moved to Resolved.
-- 2026-11-04 — `S-01` plan ready: `docs/30-implementation/spikes/s-01-model-comparison.md`.
-  Six models, CPU-first Intel target, schema and rubric tests, happy and unhappy paths.
-  Blocked on owner approval to install `llama.cpp` and download about 12 GB.
+- 2026-11-04 — `S-01` smoke complete: `docs/30-implementation/spikes/s-01-model-comparison.md`.
+  `LFM2.5-1.2B-Instruct QAD Q4_0` passes the smoke bar. `2.6B` and the dense `3B` fail
+  latency on the Intel laptop. `350M` fails quality. Awaiting default-model confirmation.

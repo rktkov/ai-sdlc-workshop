@@ -17,11 +17,11 @@
 | `T-006` | DONE | 2026-11-04 | Card model, validation and text renderer in `CLI-13` order. Happy and unhappy tests pass. |
 | `T-007` | DONE | 2026-11-04 | Gesture POST -> taste service -> SQLite. Signal and cold period commit together; retry is idempotent. |
 | `S-02` | DONE | 2026-11-04 | Closed: provider B is out of v1. Local server API rejected; managed endpoint is a future preset only. |
-| `S-01` | BLOCKED | 2026-11-04 | Plan ready. Needs approval to install `llama.cpp` and download about 12 GB of models. |
+| `S-01` | REVIEW | 2026-11-04 | Smoke complete. 1.2B passes; 2.6B and 3B fail latency; 350M fails quality. Awaiting default-model confirmation. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. Next task: `S-01` approval.
+Definition of Done passes and the backlog is updated. Next: owner confirms the S-01 default.
 
 ## Sprint 1
 
