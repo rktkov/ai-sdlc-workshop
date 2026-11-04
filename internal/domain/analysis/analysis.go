@@ -28,6 +28,13 @@ const (
 // ErrLLMTimeout means the model request exceeded its deadline.
 var ErrLLMTimeout = errors.New("llm timeout")
 
+var (
+	// ErrAnalysisExists means a terminal row already exists for the natural key.
+	ErrAnalysisExists = errors.New("analysis already exists")
+	// ErrAnalysisNotFound means no analysis matches the key.
+	ErrAnalysisNotFound = errors.New("analysis not found")
+)
+
 var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // AxisScore is one scored profile axis.
