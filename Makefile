@@ -13,16 +13,22 @@ lint: ## Run golangci-lint with the pinned configuration
 test: ## Run unit tests
 	$(GO) test ./...
 
+test-contract: ## Run CLI and server contract tests
+	$(GO) test ./internal/transport/contract/...
+
+test-e2e: ## Run integration-tagged end-to-end tests
+	$(GO) test -tags=integration ./e2e/...
+
 coverage: ## Show coverage per package
 	$(GO) test -cover ./...
 
 coverage-check: ## Fail when a tested package is below the threshold
-	@out=$$($(GO) test -cover ./...); echo "$$out"; echo "$$out" | awk -v t=$(COVERAGE_THRESHOLD) '/coverage:/ {gsub("%", "", $$5); if ($$5 + 0 < t) {print "coverage below threshold: " $$2 " " $$5 "%"; bad = 1}} END {exit bad}'
+	@out=$$($(GO) test -cover ./...); echo "$$out"; echo "$$out" | awk -v t=$(COVERAGE_THRESHOLD) '/coverage:/ && $$0 !~ /no statements/ {gsub("%", "", $$5); if ($$5 + 0 < t) {print "coverage below threshold: " $$2 " " $$5 "%"; bad = 1}} END {exit bad}'
 
 build: ## Compile all packages
 	$(GO) build ./...
 
-check: lint test build ## Run the full local gate
+check: lint test test-contract build ## Run the full local gate
 
 clean: ## Remove local build output
 	$(GO) clean ./...

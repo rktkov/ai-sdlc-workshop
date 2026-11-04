@@ -349,4 +349,7 @@ Append-only. One line per event, newest last.
   the fold and deletion (`DOC-19`).
 - 2026-11-04 — `T-001` done: `go.mod`, Makefile, `.golangci.yml`, `.editorconfig`,
   `.gitattributes`, `.gitignore` and the `internal/foundation` scaffold. `make check` and
-  `make coverage-check` pass. Next task `T-002`.
+  `make coverage-check` pass.
+- 2026-11-04 — `T-001a` done: contract and E2E harness, deterministic fakes, golden
+  fixture and a local git repository. `make test-contract`, `make test-e2e` and
+  `make check` pass. Next task `T-002`.

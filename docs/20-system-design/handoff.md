@@ -10,7 +10,7 @@
 ```
 Read execution/docs/20-system-design/handoff.md in full and follow it as your
 operating brief. Work from execution/docs/30-implementation/backlog.md and
-tasks.md. Start with task T-001a. Do not write production code before its tests
+tasks.md. Start with task T-002. Do not write production code before its tests
 exist and fail.
 ```
 
@@ -71,7 +71,7 @@ Done 39 | In review 0 | In progress 0 | Blocked 0 | Remaining 0
   are confirmed.
 - **Assembly is complete.** `ARCH-501`…`ARCH-505` are `DONE`. The final gate passed.
 - **Handoff is complete.** `ARCH-601` is `DONE`. The implementation backlog is active.
-  Next task `T-001a`.
+  Next task `T-002`.
 
 **Documentation language.** All documents use ASD-STE100 (`DOC-20`). The pre-STE originals
 are archived at [`_archive/pre-ste-2026-11-03/`](../_archive/pre-ste-2026-11-03/). The
@@ -161,13 +161,12 @@ The task register is [`../../30-implementation/tasks.md`](../../30-implementatio
 
 | ID | Task | Output | Acceptance |
 |----|------|--------|------------|
-| `T-001a` | Test harness, fakes and golden fixtures | `internal/transport/contract`, `e2e/`, Makefile targets | `make test-contract` and `make test-e2e` run. Fakes are deterministic. |
 | `T-002` | Config, logger and `doctor` stub | `internal/config`, `internal/pkg/logger` | Bad config fails fast. Logs are structured. |
 | `T-003` | SQLite, schema v1, migrations and backup | `internal/storage`, `internal/repository/sqlite`, `migrations/` | Fresh start creates the DB. A pending migration takes a backup. |
 | `T-004` | HTTP server, token and loopback guard | `internal/transport/http` | `GET /v1/health` works with a bearer token. |
 | `T-005` | CLI client and dispatch | `cmd/ytfeed`, `internal/transport/cli` | `ytfeed doctor` reaches the server. Exit codes follow `CLI-6`. |
 
-`T-001` is done. Start with `T-001a`.
+`T-001` and `T-001a` are done. Start with `T-002`.
 
 ## 9. Open questions — how to handle them
 
