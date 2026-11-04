@@ -3,8 +3,8 @@
 ## Status
 
 Confirmed on 2026-11-04. One planned batch costs **510 quota units**. A 20-card batch is
-feasible within the 10,000-unit day. The strict ~100-unit target is **not** met. The owner
-must decide whether the target or the planner changes.
+feasible within the 10,000-unit day. The owner chose **five searches per batch** (option A).
+The strict ~100-unit target is withdrawn. `OQ-21` is resolved.
 
 ## Question
 
@@ -77,39 +77,37 @@ one search per batch and almost no metadata calls.
 
 ## Finding — the target conflicts with the design
 
-The system design estimates **2–5 searches per batch**, or **200–500 units**
+The system design estimated **2–5 searches per batch**, or **200–500 units**
 ([`batch-pipeline.md`](../../20-system-design/flows/batch-pipeline.md)). The measurement
-confirms the upper end of that estimate.
+confirms the upper end of that estimate and sets it as the contract.
 
-The PRD has two statements that do not agree with that estimate:
+The PRD had two statements that did not agree with that estimate:
 
-1. `R3` says "~100 searches/day at 10k units". Five searches per batch gives 20 batches
+1. `R3` said "~100 searches/day at 10k units". Five searches per batch gives 20 batches
    per day, not a shortage.
-2. §15.4 says that a batch above ~100 units leaves "fewer than 3 batches" per day. This is
+2. §15.4 said that a batch above ~100 units leaves "fewer than 3 batches" per day. This is
    false for 510 units. `10,000 / 510` is about 19 batches, not fewer than 3.
 
 The ~100-unit target permits one search per batch and almost no metadata calls. The design
-permits 2–5 searches. The two cannot both be true.
+estimated 2–5 searches. The two could not both be true.
 
-## Decision requested
+## Decision
 
-| Option | Planner | Units per batch | Batches/day at 80% | Effect |
+The owner chose **option A** on 2026-11-04: five searches per batch, 510 units.
+
+| Option | Planner | Units per batch | Batches/day at 80% | Result |
 |--------|---------|----------------:|-------------------:|--------|
-| **A (recommended)** | 5 interests, 5 searches | 510 | 15 | Keep the current design. Correct `R3` and §15.4. 20 cards GO |
-| B | 1 search per batch, rotate interests; fill with mostPopular and subscriptions | ~105 | ~76 | Meet the ~100-unit intent. Each batch covers one interest, not five |
+| **A (chosen)** | 5 interests, 5 searches | 510 | 15 | Keep the current design. Correct `R3` and §15.4. 20 cards GO |
+| B (rejected) | 1 search per batch, rotate interests; fill with mostPopular and subscriptions | ~105 | ~76 | Meet the ~100-unit intent. Each batch covers one interest, not five |
 
 Option A keeps candidate breadth and micro-blogger balance simple. The daily budget is
-ample for one owner. Option B meets the stated target but narrows each batch to one
-interest. Over several batches, interest rotation restores coverage. Option B needs more
-work in `T-030` and `T-032`.
-
-Without a decision, `T-030` and `T-032` stay blocked. The default size of 20 cards is not
-blocked.
+ample for one owner. Option B would narrow each batch to one interest and add work to
+`T-030` and `T-032`.
 
 ## Consequence for T-030 and T-032
 
-- `T-030` must state the number of searches per batch. Five for option A. One for option B.
-- `T-032` must reserve 510 units for option A, or about 105 for option B, before a batch.
+- `T-030` plans five searches per batch, one per interest.
+- `T-032` reserves 510 units before a batch.
 - `T-032` must not use 100 units as a hard gate for a 20-card batch. The minimum for one
   search plus metadata is already about 102 units.
 - `F7` behavior does not change: warn at 80%, refuse at 100%, serve the cached feed.

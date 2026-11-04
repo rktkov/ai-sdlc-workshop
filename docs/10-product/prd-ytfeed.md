@@ -368,7 +368,7 @@ F35–F40, provider abstraction for Postgres, accessibility work.
 |---|------|-----------|--------|------------|
 | R1 | **The opencode server API shape and stability are unknown**. No code has called it programmatically | High | High | Run a spike on day 1. Keep the OpenAI-compatible adapter as the fallback. Provider B is optional for v1 |
 | R2 | **Small local models fail the rubric**: prose instead of schema-valid JSON, or weak judgment | High | High | Schema-constrained output and validation. A ladder of LFM2.5 sizes. Rubric v1 stays deliberately simple. `invalid_model_output` is a visible state |
-| R3 | **YouTube quota**: ~100 searches/day at 10k units | Medium | High | Quota ledger, 80% warning, cached-feed degradation, batch size configurable |
+| R3 | **YouTube quota**: 510 units per 5-interest batch; 15 batches/day at 80% of 10k | Low | High | Quota ledger, 80% warning, cached-feed degradation, batch size configurable. Measured by `S-03` |
 | R4 | **yt-dlp fragility**: YouTube changes break it | Medium | Medium | Transcript-only for analysis. yt-dlp used only for explicit downloads. Version surfaced in `doctor` |
 | R5 | **5,000 analyses/day is implausible on a laptop** | High | Medium | Accept per-instance limits. Document the ceiling honestly. A hosted provider is a v2 decision |
 | R6 | **Ollama stable cannot load `lfm2moe`** (`missing tensor 'output_norm.weight'`) | High | Medium | Use `llama-server` for MoE models, or Ollama ≥ v0.17.1-rc0. Dense LFM2 is not affected |
@@ -456,7 +456,7 @@ F35–F40, provider abstraction for Postgres, accessibility work.
 | One gesture persisted end to end | S | Proves the write path |
 | **Spike: model comparison (Q1)** | M | Highest technical risk |
 | **Spike: opencode API probe (Q2)** | S | Highest integration risk |
-| **Spike: quota measurement (Q3/R3)** | S | Determines batch feasibility |
+| **Spike: quota measurement (Q3/R3)** | S | Done: 510 units per batch. 20 cards feasible |
 
 ### 15.4 Risk-first ordering
 
@@ -467,8 +467,10 @@ Tackle these **before** committing to estimates:
    downstream matters until the team answers this question.
 2. **Q2 — opencode API.** If provider B is not viable, the cost model changes
    from "free" to "local only". That change affects the 12-month plan.
-3. **R3 — quota.** If a 20-card batch costs more than ~100 units, the daily
-   budget supports fewer than 3 batches. The feed size must then shrink.
+3. **R3 — quota.** `S-03` measured 510 units for a 5-interest batch: five
+   `search.list` calls at 100 units each, plus 10 units for metadata. The 80%
+   budget supports 15 batches per day. The 20-card default stays. Five searches
+   per batch is the v1 contract (`OQ-21`).
 
 ### 15.5 Definition of Ready for any v1 task
 

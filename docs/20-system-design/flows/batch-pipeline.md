@@ -123,7 +123,7 @@ sequenceDiagram
 | Quantity | Estimate | Consequence |
 |----------|----------|-------------|
 | Cards per batch | 20 | `FEED_SIZE` |
-| Searches per batch | 2–5 | 200–500 quota units |
+| Searches per batch | 5 | 500 quota units; 510 with metadata (`S-03`) |
 | Transcript size | 20–100 KB | Staging is cheap. The 8 MiB cap is generous. |
 | Analysis JSON | 1–3 KB | One row per video |
 | Batch wall clock | 5–20 min on a laptop | Streaming is mandatory (`F14`) |

@@ -23,7 +23,7 @@
 | `T-022` | DONE | 2026-11-04 | Cold-period validation, active query, find by target and refresh. Expired rows stay. Happy and unhappy tests pass. |
 | `T-023` | DONE | 2026-11-04 | Reason picker keys 1–4, Enter default, Esc other, scope preview and invalid-key error. |
 | `T-024` | DONE | 2026-11-04 | Profile snapshot returns axes, weights, examples, note and rubric version. No interests. |
-| `S-03` | DONE | 2026-11-04 | Measured 510 units for a 5-interest batch (5 search, 5 videos, 5 channels). 20 cards GO within 10k/day; ~100-unit target NO-GO. Target decision open in `OQ-21`. |
+| `S-03` | DONE | 2026-11-04 | Measured 510 units for a 5-interest batch (5 search, 5 videos, 5 channels). 20 cards GO within 10k/day. Decision A: five searches per batch. `OQ-21` resolved. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`

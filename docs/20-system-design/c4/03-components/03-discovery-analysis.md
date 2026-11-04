@@ -92,7 +92,7 @@ C4Component
 
 | Call | Units | Note |
 |------|-------|------|
-| `search.list` | 100 | The dominant cost; ~100 searches/day at 10k |
+| `search.list` | 100 | The dominant cost. Five per batch is 500 units; 15 batches/day at 80% budget with metadata |
 | `videos.list` | 1 | Metadata for up to 50 IDs |
 | `channels.list` | 1 | Subscriber counts, topic tags |
 | `subscriptions.list` | 1 | Import, paginated |
