@@ -352,4 +352,7 @@ Append-only. One line per event, newest last.
   `make coverage-check` pass.
 - 2026-11-04 — `T-001a` done: contract and E2E harness, deterministic fakes, golden
   fixture and a local git repository. `make test-contract`, `make test-e2e` and
-  `make check` pass. Next task `T-002`.
+  `make check` pass.
+- 2026-11-04 — `T-002` done: `internal/config` and `internal/pkg/logger`. Config
+  validation lists every problem, secrets are redacted, logs are JSON or text. Happy and
+  unhappy tests pass. Next task `T-003`.

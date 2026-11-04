@@ -132,3 +132,4 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 |------|------|--------|
 | 2026-11-04 | `T-001` | DONE. `go.mod`, Makefile, lint config, editor and git files. `make check` and `make coverage-check` pass. |
 | 2026-11-04 | `T-001a` | DONE. Contract harness, E2E harness, fakes and golden fixture. `make test-contract`, `make test-e2e` and `make check` pass. |
+| 2026-11-04 | `T-002` | DONE. Config load and validation, structured logger, redacted config. Happy and unhappy tests pass. |

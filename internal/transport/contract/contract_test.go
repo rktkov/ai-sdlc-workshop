@@ -6,6 +6,61 @@ import (
 	"testing"
 )
 
+func TestHealthValidateCases(t *testing.T) {
+	tests := []struct {
+		name   string
+		health Health
+		wantOK bool
+	}{
+		{name: "valid", health: Health{Status: "ok", Version: "dev", SchemaVersion: 1}, wantOK: true},
+		{name: "status", health: Health{Status: "down", Version: "dev", SchemaVersion: 1}},
+		{name: "version", health: Health{Status: "ok", Version: "", SchemaVersion: 1}},
+		{name: "schema", health: Health{Status: "ok", Version: "dev", SchemaVersion: 0}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.health.Validate()
+			if tt.wantOK && err != nil {
+				t.Fatalf("Validate() = %v", err)
+			}
+			if !tt.wantOK && err == nil {
+				t.Fatal("Validate() = nil, want an error")
+			}
+		})
+	}
+}
+
+func TestHealthContractHappy(t *testing.T) {
+	raw, err := os.ReadFile("testdata/health.json")
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+
+	var health Health
+	if err := json.Unmarshal(raw, &health); err != nil {
+		t.Fatalf("decode golden: %v", err)
+	}
+	if err := health.Validate(); err != nil {
+		t.Fatalf("Validate() = %v", err)
+	}
+}
+
+func TestHealthContractUnhappy(t *testing.T) {
+	raw, err := os.ReadFile("testdata/health-missing-schema.json")
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+
+	var health Health
+	if err := json.Unmarshal(raw, &health); err != nil {
+		t.Fatalf("decode golden: %v", err)
+	}
+	if err := health.Validate(); err == nil {
+		t.Fatal("Validate() = nil, want an error")
+	}
+}
+
 func TestHealthGolden(t *testing.T) {
 	raw, err := os.ReadFile("testdata/health.json")
 	if err != nil {

@@ -10,10 +10,11 @@
 |----|--------|------|------|
 | `T-001` | DONE | 2026-11-04 | Repo skeleton, Makefile and lint config. `make check` passes. |
 | `T-001a` | DONE | 2026-11-04 | Test harness, contract fixtures and E2E fakes. All targets pass. |
+| `T-002` | DONE | 2026-11-04 | Config validation, structured logger and redacted output. Happy and unhappy tests pass. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. Next task: `T-002`.
+Definition of Done passes and the backlog is updated. Next task: `T-003`.
 
 ## Sprint 1
 
