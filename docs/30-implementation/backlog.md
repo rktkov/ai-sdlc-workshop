@@ -81,6 +81,11 @@ Sprint 1 is complete when `T-001`…`T-007` pass and the three spikes have a wri
 | `S-02` | What is the opencode server API surface, and is it stable enough to be a preset? (`Q2`) | A written probe result. Preset or reject. | `T-035`, `OQ-06` |
 | `S-03` | Does a 20-card batch cost at most ~100 quota units? (`R3`) | Measured units for one real batch. A go or no-go for the default size. | `T-030`, `T-032`, `F13` |
 
+`S-03` result: one 5-interest batch costs 510 units (5 `search.list`, 5 `videos.list`,
+5 `channels.list`). The 80% budget supports 15 batches per day. A 20-card batch is GO.
+The ~100-unit target is NO-GO. `OQ-21` records the target decision. The full report is
+[`spikes/s-03-quota-measurement.md`](spikes/s-03-quota-measurement.md).
+
 The spikes run first because they can change the estimate and the default model. They do
 not block the foundation work.
 
@@ -145,3 +150,4 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `T-022` | DONE. Cold-period validation, active query, find by target and refresh. Expired rows stay. |
 | 2026-11-04 | `T-023` | DONE. Reason picker keys 1–4, Enter default, Esc other and scope preview. |
 | 2026-11-04 | `T-024` | DONE. Profile snapshot returns axes, weights, examples, note and rubric version. No interests. |
+| 2026-11-04 | `S-03` | DONE. Measured 510 units for a 5-interest batch. 20 cards GO within 10k/day; the ~100-unit target is NO-GO. Target decision open in `OQ-21`. |

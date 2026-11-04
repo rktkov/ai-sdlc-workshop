@@ -4,6 +4,7 @@ coverage.out
 .env
 .env.*
 !.env.example
+.secrets/
 /data/
 *.db
 *.db-wal

@@ -1,0 +1,112 @@
+{
+  "started_at": "2026-11-04T21:46:51Z",
+  "interests": [
+    "AI agents",
+    "local LLM",
+    "distributed systems",
+    "developer productivity",
+    "machine learning"
+  ],
+  "max_results": 50,
+  "calls": [
+    {
+      "name": "search.list",
+      "units": 100,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "search.list",
+      "units": 100,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "search.list",
+      "units": 100,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "search.list",
+      "units": 100,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "search.list",
+      "units": 100,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "videos.list",
+      "units": 1,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "videos.list",
+      "units": 1,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "videos.list",
+      "units": 1,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "videos.list",
+      "units": 1,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "videos.list",
+      "units": 1,
+      "status": 200,
+      "items": 49
+    },
+    {
+      "name": "channels.list",
+      "units": 1,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "channels.list",
+      "units": 1,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "channels.list",
+      "units": 1,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "channels.list",
+      "units": 1,
+      "status": 200,
+      "items": 50
+    },
+    {
+      "name": "channels.list",
+      "units": 1,
+      "status": 200,
+      "items": 7
+    }
+  ],
+  "total_units": 510,
+  "unique_videos": 249,
+  "unique_channels": 207,
+  "quota_exhausted": false,
+  "meets_strict_target": false,
+  "batches_per_day_at_80_percent": 15,
+  "feasible_20_cards": true,
+  "verdict": "GO within the daily budget, NO-GO for the ~100-unit target",
+  "note": "The batch fits the 10,000-unit day with at least 3 batches at 80% budget, but it exceeds 100 units."
+}

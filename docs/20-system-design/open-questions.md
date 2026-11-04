@@ -1,6 +1,6 @@
 # Open questions — architecture documentation
 
-> **Status:** living document · **Last updated:** 2026-11-03
+> **Status:** living document · **Last updated:** 2026-11-04
 > **Policy (`SD-4`):** record contradictions here. The documentation does not resolve
 > them. No entry proposes an edit to `docs/00-rules/`. A rule change needs a rules PR
 > (`H-9`, `README.md` §4).
@@ -31,6 +31,7 @@
 | OQ-16 | **Server lifecycle.** `A-9` says "single binary, single process". `A-10` says the CLI auto-starts the server if absent. At runtime that is two processes. Who owns the server, when does it exit, what happens on port collision or after `kill -9` of the CLI? | `A-9`, `A-10`, `R-10` | One binary, two process roles. The CLI spawns a detached server if `GET /v1/health` fails, waits for readiness, and never kills a server it did not start. The server exits after `SESSION_IDLE_TIMEOUT` with no lease if it was auto-started. An explicitly started `ytfeed serve` stays up until signalled. | ADR-0001, `ARCH-103` | Owner |
 | OQ-17 | **`--json` vs streaming.** `F28` and `CLI-8` require `--json` to print exactly one JSON object or array on stdout. `F14` requires cards to stream as they finish. A single array cannot be emitted incrementally without buffering or NDJSON, which violates the contract. | `F28`, `CLI-8`, `F14`, `CLI-14a` | Interactive mode streams cards (SSE + terminal rendering). `--json` buffers the batch and prints one JSON array when composition completes. It performs no rendering and never mixes stream events into stdout. | `ARCH-103`, ADR-0006 | Owner |
 | OQ-18 | **How a gesture changes profile weights.** `F5` requires every gesture to update the taste profile, but the update rule (magnitude, decay, clamping, per-axis attribution) is unspecified. | `F5`, `F4`, `A-20` | Store the raw signal. Apply a bounded nudge (±0.05, clamped to [0,1]) to the axes that the card scored. Never let one gesture flip an axis. The rule is versioned with the rubric so it can be tuned. | `ARCH-304` | Owner |
+| OQ-21 | **Quota target per batch.** `S-03` measures 510 units for a 5-interest batch, but `R3` and §15.4 use a ~100-unit target and say that a larger batch leaves fewer than 3 batches per day. Which is the contract: five searches per batch, or one? | PRD `R3`, PRD §15.4, [`S-03`](../30-implementation/spikes/s-03-quota-measurement.md), [`batch-pipeline.md`](flows/batch-pipeline.md) | Five searches per batch, 510 units. The 80% budget supports 15 batches per day, so 20 cards are feasible. The ~100-unit target needs a one-search planner. | `T-030`, `T-032`, `F13` | Owner |
 
 ## Resolved
 
@@ -56,3 +57,4 @@
   concepts, and `taste` owns axis weights while `analysis` owns the rubric artifact. Rows
   moved to Resolved. `ARCH-301`, `ARCH-303` and `ARCH-304` are unblocked.
 - 2026-11-04 — `OQ-06` resolved by the owner after spike `S-02`: provider B is out of v1. The local opencode server API is rejected; the managed endpoint stays a future preset only.
+- 2026-11-04 — `OQ-21` added after spike `S-03`: one 5-interest batch costs 510 units. The PRD ~100-unit target conflicts with the 2–5 search design estimate. The owner must choose the target or the planner.
