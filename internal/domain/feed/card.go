@@ -3,6 +3,8 @@ package feed
 import (
 	"fmt"
 	"time"
+
+	"github.com/rktkov/ytfeed/internal/domain/taste"
 )
 
 // State is the analysis state of a card.
@@ -47,6 +49,7 @@ type Card struct {
 	Position        int
 	Decision        CardDecision
 	AnalyzedLate    bool
+	ScoredAxes      []taste.AxisScore
 }
 
 // Validate checks the card fields needed for rendering.

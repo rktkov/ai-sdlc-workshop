@@ -8,6 +8,7 @@ import (
 
 	"github.com/rktkov/ytfeed/internal/domain/analysis"
 	"github.com/rktkov/ytfeed/internal/domain/discovery"
+	"github.com/rktkov/ytfeed/internal/domain/taste"
 )
 
 // BatchState is the lifecycle state of one batch.
@@ -204,6 +205,10 @@ func applyResult(card *Card, result analysis.Analysis) {
 		card.TLDR = result.TLDR
 		card.Similarity = result.Similarity
 		card.WhyThisCard = result.WhyThisCard
+		card.ScoredAxes = make([]taste.AxisScore, 0, len(result.AxisScores))
+		for _, score := range result.AxisScores {
+			card.ScoredAxes = append(card.ScoredAxes, taste.AxisScore{Axis: score.Axis, Score: score.Score})
+		}
 	case analysis.StateFailed:
 		card.State = StateFailed
 		card.Reason = string(result.Reason)
