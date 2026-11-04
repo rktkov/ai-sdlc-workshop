@@ -106,6 +106,11 @@ only manual check left. The first profile is provisional (`OQ-22`).
 staging, analysis and batch orchestration pass their unit tests. Live YouTube, yt-dlp and
 model calls still need the owner's consent and local binaries.
 
+**E5 status:** `T-040`…`T-045` are `DONE` (2026-11-05). Batch order, sessions, gestures,
+feed streaming, library and playback pass their unit and contract tests. The feed stream
+is not yet wired into `ytfeed serve`, and the library/playback commands are not yet wired
+to the HTTP API. That integration belongs to the final assembly.
+
 ## 8. Day 3 — loop and quality
 
 | Epic | Tasks |
@@ -171,3 +176,9 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `T-035` | DONE. One LLM adapter, profile prompt, JSON schema and strict validation. |
 | 2026-11-04 | `T-036` | DONE. Analysis repository with terminal rows and failure states; migration v7. |
 | 2026-11-04 | `T-037` | DONE. Batch pipeline in stage order with resume from stored analyses and explicit failures. |
+| 2026-11-05 | `T-040` | DONE. Batch order with analyzed-first positions, frozen seen prefix and late-analysis marking. |
+| 2026-11-05 | `T-041` | DONE. One open session, live lease conflict, stale reclaim and closed-session resume. |
+| 2026-11-05 | `T-042` | DONE. Gesture service with taste-before-advance, local navigation and idempotency. |
+| 2026-11-05 | `T-043` | DONE. SSE feed stream, JSON object output and text card fallback. |
+| 2026-11-05 | `T-044` | DONE. Library saved/downloaded states, explicit download, video-id file naming and migration v9. |
+| 2026-11-05 | `T-045` | DONE. Playback through `PLAYER_CMD` or the OS default, async launch. |

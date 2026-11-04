@@ -37,10 +37,16 @@
 | `T-035` | DONE | 2026-11-04 | OpenAI-compatible LLM adapter, profile prompt, JSON schema and strict local validation with explicit failures. |
 | `T-036` | DONE | 2026-11-04 | Analysis repository with terminal rows per video and rubric, axis scores, migration v7 and explicit failure states. |
 | `T-037` | DONE | 2026-11-04 | Batch pipeline: plan, discover, enrich, select, fetch, stage, analyze and persist in order. Resume skips stored analyses. |
+| `T-040` | DONE | 2026-11-05 | Batch composition: analyzed-first order, dense positions, deterministic ties, frozen seen prefix and late-analysis marking. |
+| `T-041` | DONE | 2026-11-05 | Session and lease: one open session, live lease conflict, stale reclaim, closed-session resume and cursor preservation. |
+| `T-042` | DONE | 2026-11-05 | Gestures: left/right/save call `taste` before advancing, down/up stay local, duplicate gesture IDs are idempotent. |
+| `T-043` | DONE | 2026-11-05 | Feed stream: SSE `batch.started`/`card.upsert`/`batch.done`, one JSON object with `--json` and text card fallback. |
+| `T-044` | DONE | 2026-11-05 | Library: saved/downloaded states, explicit download, file by `video_id`, remove and list. Migration v9. |
+| `T-045` | DONE | 2026-11-05 | Playback: `PLAYER_CMD` or OS default, async launch, file checks and library open. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. Next task: `T-040`.
+Definition of Done passes and the backlog is updated. Next task: `T-050`.
 
 ## Sprint 1
 
