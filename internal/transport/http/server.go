@@ -13,13 +13,26 @@ import (
 
 // Handler returns the local API handler.
 func Handler(token, version string, schemaVersion int) http.Handler {
-	return HandlerWithRemote(token, version, schemaVersion, false)
+	return HandlerWithGestureRemote(token, version, schemaVersion, nil, false)
 }
 
 // HandlerWithRemote returns the API handler. A remote bind skips the loopback guard.
 func HandlerWithRemote(token, version string, schemaVersion int, allowRemote bool) http.Handler {
+	return HandlerWithGestureRemote(token, version, schemaVersion, nil, allowRemote)
+}
+
+// HandlerWithGesture adds the gesture endpoint.
+func HandlerWithGesture(token, version string, schemaVersion int, gesture http.HandlerFunc) http.Handler {
+	return HandlerWithGestureRemote(token, version, schemaVersion, gesture, false)
+}
+
+// HandlerWithGestureRemote adds the gesture endpoint and optional remote bind.
+func HandlerWithGestureRemote(token, version string, schemaVersion int, gesture http.HandlerFunc, allowRemote bool) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", health(version, schemaVersion))
+	if gesture != nil {
+		mux.HandleFunc("/v1/gestures", gesture)
+	}
 	if allowRemote {
 		return auth(token, mux)
 	}

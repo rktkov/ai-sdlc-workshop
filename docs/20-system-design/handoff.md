@@ -10,7 +10,7 @@
 ```
 Read execution/docs/20-system-design/handoff.md in full and follow it as your
 operating brief. Work from execution/docs/30-implementation/backlog.md and
-tasks.md. Start with task T-007. Do not write production code before its happy
+tasks.md. Start with spike S-01. Do not write production code before its happy
 and unhappy tests exist and fail.
 ```
 
@@ -71,7 +71,7 @@ Done 39 | In review 0 | In progress 0 | Blocked 0 | Remaining 0
   are confirmed.
 - **Assembly is complete.** `ARCH-501`…`ARCH-505` are `DONE`. The final gate passed.
 - **Handoff is complete.** `ARCH-601` is `DONE`. The implementation backlog is active.
-  Next task `T-007`.
+  Next: `S-01`, `S-02`, `S-03`. These need owner input and resources.
 
 **Documentation language.** All documents use ASD-STE100 (`DOC-20`). The pre-STE originals
 are archived at [`_archive/pre-ste-2026-11-03/`](../_archive/pre-ste-2026-11-03/). The
@@ -162,7 +162,7 @@ The task register is [`../../30-implementation/tasks.md`](../../30-implementatio
 | ID | Task | Output | Acceptance |
 |----|------|--------|------------|
 
-`T-001`…`T-006` are done. Start with `T-007`.
+`T-001`…`T-007` are done. Sprint 1 code is complete. The next step is the three spikes.
 
 ## 9. Open questions — how to handle them
 

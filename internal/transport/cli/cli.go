@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/rktkov/ytfeed/internal/config"
+	"github.com/rktkov/ytfeed/internal/domain/taste"
+	"github.com/rktkov/ytfeed/internal/repository/sqlite"
 	"github.com/rktkov/ytfeed/internal/storage"
 	"github.com/rktkov/ytfeed/internal/transport/contract"
 	httpapi "github.com/rktkov/ytfeed/internal/transport/http"
@@ -156,9 +158,12 @@ func runServeWith(ctx context.Context, args []string, getenv func(string) string
 		_, _ = fmt.Fprintln(stderr, "warning: binding to a non-loopback address; the API token is the only control")
 	}
 
+	tasteService := &taste.Service{Store: sqlite.NewTasteRepository(db)}
+	handler := httpapi.HandlerWithGestureRemote(token, Version, schemaVersion, httpapi.GestureHandler(tasteService, "owner"), allowRemote)
+
 	server := &http.Server{
 		Addr:              address,
-		Handler:           httpapi.HandlerWithRemote(token, Version, schemaVersion, allowRemote),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	if err := serve(server); err != nil && !errors.Is(err, http.ErrServerClosed) {

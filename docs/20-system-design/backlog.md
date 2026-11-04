@@ -365,4 +365,7 @@ Append-only. One line per event, newest last.
   the server, `serve` binds locally, `--allow-remote` warns, exit codes follow `CLI-6`.
   Happy and unhappy tests pass.
 - 2026-11-04 — `T-006` done: `internal/domain/feed` and the CLI card renderer. Card
-  validation and `CLI-13` order are tested. Happy and unhappy tests pass. Next task `T-007`.
+  validation and `CLI-13` order are tested. Happy and unhappy tests pass.
+- 2026-11-04 — `T-007` done: `POST /v1/gestures` → `taste.Service` → SQLite. A left
+  swipe commits a signal and a cold period in one transaction. A retry is idempotent.
+  Sprint 1 code is complete. The spikes need owner resources and decisions.
