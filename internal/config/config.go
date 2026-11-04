@@ -67,15 +67,27 @@ func Load(getenv func(string) string) (Config, error) {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
+	cfg := defaultConfig(getenv)
+	problems := validateApp(cfg)
+	problems = append(problems, parseFeed(getenv, &cfg)...)
+	problems = append(problems, parseAnalysis(getenv, &cfg)...)
+	problems = append(problems, parseLLM(getenv, &cfg)...)
+	if strings.TrimSpace(cfg.Storage.DataDir) == "" {
+		problems = append(problems, "YTFEED_DATA_DIR must not be empty")
+	}
+	if len(problems) > 0 {
+		return Config{}, fmt.Errorf("invalid configuration:\n- %s", strings.Join(problems, "\n- "))
+	}
+	return cfg, nil
+}
 
-	cfg := Config{
+func defaultConfig(getenv func(string) string) Config {
+	return Config{
 		App: AppConfig{
 			LogEnv:   valueOr(getenv, "LOG_ENV", "development"),
 			LogLevel: valueOr(getenv, "LOG_LEVEL", "info"),
 		},
-		Feed: FeedConfig{
-			Size: 20,
-		},
+		Feed: FeedConfig{Size: 20},
 		YouTube: YouTubeConfig{
 			OAuthClientFile: strings.TrimSpace(getenv("GOOGLE_OAUTH_CLIENT_FILE")),
 			APIKey:          strings.TrimSpace(getenv("YOUTUBE_API_KEY")),
@@ -95,20 +107,23 @@ func Load(getenv func(string) string) (Config, error) {
 			JSONMode: true,
 			Timeout:  60 * time.Second,
 		},
-		Storage: StorageConfig{
-			DataDir: valueOr(getenv, "YTFEED_DATA_DIR", "./data"),
-		},
+		Storage: StorageConfig{DataDir: valueOr(getenv, "YTFEED_DATA_DIR", "./data")},
 	}
+}
 
+func validateApp(cfg Config) []string {
 	var problems []string
-
 	if cfg.App.LogEnv != "development" && cfg.App.LogEnv != "production" {
 		problems = append(problems, "LOG_ENV must be development or production")
 	}
 	if !validLogLevel(cfg.App.LogLevel) {
 		problems = append(problems, "LOG_LEVEL must be debug, info, warn or error")
 	}
+	return problems
+}
 
+func parseFeed(getenv func(string) string, cfg *Config) []string {
+	var problems []string
 	if raw := strings.TrimSpace(getenv("FEED_SIZE")); raw != "" {
 		size, err := strconv.Atoi(raw)
 		if err != nil || size < 1 || size > 20 {
@@ -117,7 +132,11 @@ func Load(getenv func(string) string) (Config, error) {
 			cfg.Feed.Size = size
 		}
 	}
+	return problems
+}
 
+func parseAnalysis(getenv func(string) string, cfg *Config) []string {
+	var problems []string
 	if raw := strings.TrimSpace(getenv("ANALYSIS_CONCURRENCY")); raw != "" {
 		value, err := strconv.Atoi(raw)
 		if err != nil || value < 1 || value > 8 {
@@ -153,14 +172,17 @@ func Load(getenv func(string) string) (Config, error) {
 	if strings.TrimSpace(cfg.Analysis.YTDLP) == "" {
 		problems = append(problems, "YTDLP_BIN must not be empty")
 	}
+	return problems
+}
 
+func parseLLM(getenv func(string) string, cfg *Config) []string {
+	var problems []string
 	if !validURL(cfg.LLM.BaseURL) {
 		problems = append(problems, "LLM_BASE_URL must be an http or https URL")
 	}
 	if strings.TrimSpace(cfg.LLM.Model) == "" {
 		problems = append(problems, "LLM_MODEL must not be empty")
 	}
-
 	if raw := strings.TrimSpace(getenv("LLM_JSON_MODE")); raw != "" {
 		mode, err := strconv.ParseBool(raw)
 		if err != nil {
@@ -169,7 +191,6 @@ func Load(getenv func(string) string) (Config, error) {
 			cfg.LLM.JSONMode = mode
 		}
 	}
-
 	if raw := strings.TrimSpace(getenv("LLM_TIMEOUT")); raw != "" {
 		value, err := time.ParseDuration(raw)
 		if err != nil || value <= 0 {
@@ -178,15 +199,7 @@ func Load(getenv func(string) string) (Config, error) {
 			cfg.LLM.Timeout = value
 		}
 	}
-
-	if strings.TrimSpace(cfg.Storage.DataDir) == "" {
-		problems = append(problems, "YTFEED_DATA_DIR must not be empty")
-	}
-
-	if len(problems) > 0 {
-		return Config{}, fmt.Errorf("invalid configuration:\n- %s", strings.Join(problems, "\n- "))
-	}
-	return cfg, nil
+	return problems
 }
 
 // Redacted returns a copy safe to print in diagnostics.
