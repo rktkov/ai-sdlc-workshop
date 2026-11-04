@@ -355,4 +355,7 @@ Append-only. One line per event, newest last.
   `make check` pass.
 - 2026-11-04 — `T-002` done: `internal/config` and `internal/pkg/logger`. Config
   validation lists every problem, secrets are redacted, logs are JSON or text. Happy and
-  unhappy tests pass. Next task `T-003`.
+  unhappy tests pass.
+- 2026-11-04 — `T-003` done: `internal/storage` and `migrations/`. WAL, foreign keys,
+  `synchronous=FULL`, one writer, embedded migration, backup before apply and a refusal
+  for a newer schema. Happy and unhappy tests pass. Next task `T-004`.

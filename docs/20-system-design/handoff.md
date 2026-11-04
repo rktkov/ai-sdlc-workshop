@@ -10,7 +10,7 @@
 ```
 Read execution/docs/20-system-design/handoff.md in full and follow it as your
 operating brief. Work from execution/docs/30-implementation/backlog.md and
-tasks.md. Start with task T-003. Do not write production code before its happy
+tasks.md. Start with task T-004. Do not write production code before its happy
 and unhappy tests exist and fail.
 ```
 
@@ -71,7 +71,7 @@ Done 39 | In review 0 | In progress 0 | Blocked 0 | Remaining 0
   are confirmed.
 - **Assembly is complete.** `ARCH-501`…`ARCH-505` are `DONE`. The final gate passed.
 - **Handoff is complete.** `ARCH-601` is `DONE`. The implementation backlog is active.
-  Next task `T-003`.
+  Next task `T-004`.
 
 **Documentation language.** All documents use ASD-STE100 (`DOC-20`). The pre-STE originals
 are archived at [`_archive/pre-ste-2026-11-03/`](../_archive/pre-ste-2026-11-03/). The
@@ -161,11 +161,10 @@ The task register is [`../../30-implementation/tasks.md`](../../30-implementatio
 
 | ID | Task | Output | Acceptance |
 |----|------|--------|------------|
-| `T-003` | SQLite, schema v1, migrations and backup | `internal/storage`, `internal/repository/sqlite`, `migrations/` | Fresh start creates the DB. A pending migration takes a backup. |
 | `T-004` | HTTP server, token and loopback guard | `internal/transport/http` | `GET /v1/health` works with a bearer token. |
 | `T-005` | CLI client and dispatch | `cmd/ytfeed`, `internal/transport/cli` | `ytfeed doctor` reaches the server. Exit codes follow `CLI-6`. |
 
-`T-001`, `T-001a` and `T-002` are done. Start with `T-003`.
+`T-001`, `T-001a`, `T-002` and `T-003` are done. Start with `T-004`.
 
 ## 9. Open questions — how to handle them
 
