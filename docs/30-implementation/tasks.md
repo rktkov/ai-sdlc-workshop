@@ -16,10 +16,11 @@
 | `T-005` | DONE | 2026-11-04 | CLI dispatch, `doctor`, `serve`, version and help. Exit codes and remote warning tested. |
 | `T-006` | DONE | 2026-11-04 | Card model, validation and text renderer in `CLI-13` order. Happy and unhappy tests pass. |
 | `T-007` | DONE | 2026-11-04 | Gesture POST -> taste service -> SQLite. Signal and cold period commit together; retry is idempotent. |
+| `S-02` | BLOCKED | 2026-11-04 | Server API is session-based and experimental. Managed provider is OpenAI-compatible. Needs a paid OpenCode key. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. Next task: `S-01` (needs owner input).
+Definition of Done passes and the backlog is updated. Next task: `S-02` decision (needs owner input).
 
 ## Sprint 1
 

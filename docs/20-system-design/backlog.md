@@ -369,3 +369,7 @@ Append-only. One line per event, newest last.
 - 2026-11-04 — `T-007` done: `POST /v1/gestures` → `taste.Service` → SQLite. A left
   swipe commits a signal and a cold period in one transaction. A retry is idempotent.
   Sprint 1 code is complete. The spikes need owner resources and decisions.
+- 2026-11-04 — `S-02` blocked: `docs/30-implementation/spikes/s-02-opencode-api.md`. The
+  local server API is session-based and experimental, not OpenAI-compatible. The managed
+  OpenCode provider is OpenAI-compatible and can be a preset. A paid key is needed to
+  finish the contract tests.

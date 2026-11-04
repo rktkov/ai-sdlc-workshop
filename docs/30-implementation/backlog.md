@@ -138,3 +138,4 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-04 | `T-005` | DONE. CLI dispatch, `doctor`, `serve`, `--allow-remote` warning, version and help. Happy and unhappy tests pass. |
 | 2026-11-04 | `T-006` | DONE. Card model, validation and text renderer in `CLI-13` order. Happy and unhappy tests pass. |
 | 2026-11-04 | `T-007` | DONE. Gesture endpoint, taste service and SQLite repository. Signal and cold period commit together; retry is idempotent. |
+| 2026-11-04 | `S-02` | BLOCKED. Server API is session-based and experimental. Managed provider is OpenAI-compatible. Needs a paid OpenCode key. |
