@@ -175,7 +175,7 @@ func onboardCredentials(ctx context.Context, cfg config.Config, opts onboardOpti
 	}
 	token, err = deps.Authorize(ctx, service)
 	if err != nil {
-		return identity.Token{}, authError(stderr, err)
+		return identity.Token{}, authError("ytfeed onboard", stderr, err)
 	}
 	if err := store.Write(ctx, token); err != nil {
 		_, _ = fmt.Fprintf(stderr, "ytfeed onboard: store token: %v\n", err)

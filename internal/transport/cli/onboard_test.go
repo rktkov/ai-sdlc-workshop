@@ -441,3 +441,20 @@ func TestSplitCSV(t *testing.T) {
 		t.Fatalf("splitCSV = %v", got)
 	}
 }
+
+func TestOnboardOAuthTimeout(t *testing.T) {
+	dir := t.TempDir()
+	env := authEnv(writeAuthClient(t, dir), dir)
+	deps := onboardDeps{
+		Authorize: func(context.Context, identity.Service) (identity.Token, error) {
+			return identity.Token{}, identity.ErrTimeout
+		},
+	}
+	var out, errOut bytes.Buffer
+	if code := runOnboardWith(context.Background(), []string{"--skip-interests"}, env, strings.NewReader(""), &out, &errOut, deps); code != 2 {
+		t.Fatalf("exit = %d, want 2", code)
+	}
+	if !strings.Contains(errOut.String(), "ytfeed onboard: authorization timed out") {
+		t.Fatalf("stderr = %q", errOut.String())
+	}
+}

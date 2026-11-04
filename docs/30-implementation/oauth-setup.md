@@ -88,6 +88,7 @@ with a different client.
 |------|--------|
 | 2026-11-04 | `ytfeed auth login --no-browser` started. The URL was issued. No callback arrived within two minutes. Exit `2`. |
 | 2026-11-04 | Retried with a fresh URL and port. No callback arrived within two minutes. Exit `2`. |
+| 2026-11-04 | Full `ytfeed onboard --source subscriptions-only --no-browser` started. No callback arrived within two minutes. Exit `2`. The onboarding timeout now reports `ytfeed onboard`, not `ytfeed auth login`. |
 
 The flow and the callback are ready. The owner must open the URL in a browser on this Mac
 and approve the scope within the two-minute window. Then `T-011` can store the token.

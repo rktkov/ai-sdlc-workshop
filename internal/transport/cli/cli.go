@@ -133,7 +133,7 @@ func runAuthLoginWith(ctx context.Context, args []string, getenv func(string) st
 
 	token, err := authorize(ctx, service)
 	if err != nil {
-		return authError(stderr, err)
+		return authError("ytfeed auth login", stderr, err)
 	}
 	store := tokenfile.New(cfg.Storage.DataDir)
 	if err := store.Write(ctx, token); err != nil {
@@ -191,24 +191,24 @@ func runAuthStatus(ctx context.Context, args []string, getenv func(string) strin
 	return 0
 }
 
-func authError(stderr io.Writer, err error) int {
+func authError(command string, stderr io.Writer, err error) int {
 	switch {
 	case errors.Is(err, identity.ErrConsentDenied):
-		_, _ = fmt.Fprintln(stderr, "ytfeed auth login: authorization denied")
+		_, _ = fmt.Fprintf(stderr, "%s: authorization denied\n", command)
 		return 2
 	case errors.Is(err, identity.ErrStateMismatch):
-		_, _ = fmt.Fprintln(stderr, "ytfeed auth login: authorization failed: state mismatch")
+		_, _ = fmt.Fprintf(stderr, "%s: authorization failed: state mismatch\n", command)
 		return 2
 	case errors.Is(err, identity.ErrUnauthorized):
-		_, _ = fmt.Fprintln(stderr, "ytfeed auth login: authorization rejected; run `ytfeed auth login` again")
+		_, _ = fmt.Fprintf(stderr, "%s: authorization rejected; run `ytfeed auth login` again\n", command)
 		return 2
 	case errors.Is(err, identity.ErrTimeout):
-		_, _ = fmt.Fprintln(stderr, "ytfeed auth login: authorization timed out")
+		_, _ = fmt.Fprintf(stderr, "%s: authorization timed out\n", command)
 		return 2
 	case errors.Is(err, context.Canceled):
 		return 130
 	default:
-		_, _ = fmt.Fprintf(stderr, "ytfeed auth login: authorization failed: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "%s: authorization failed: %v\n", command, err)
 		return 1
 	}
 }
