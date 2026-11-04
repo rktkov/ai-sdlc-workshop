@@ -1,0 +1,13 @@
+version: "2"
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - funlen
+  settings:
+    funlen:
+      lines: 80
+      statements: 50
