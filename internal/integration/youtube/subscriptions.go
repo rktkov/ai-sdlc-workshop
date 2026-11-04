@@ -21,6 +21,7 @@ const DefaultBaseURL = "https://www.googleapis.com/youtube/v3"
 type Source struct {
 	BaseURL string
 	Client  *http.Client
+	Region  string
 }
 
 // NewSource returns a YouTube source.
