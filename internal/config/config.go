@@ -58,7 +58,7 @@ func Load(getenv func(string) string) (Config, error) {
 		},
 		LLM: LLMConfig{
 			BaseURL:  valueOr(getenv, "LLM_BASE_URL", "http://localhost:11434/v1"),
-			Model:    valueOr(getenv, "LLM_MODEL", "lfm2.5-2.6b-instruct"),
+			Model:    valueOr(getenv, "LLM_MODEL", "lfm2.5-1.2b-instruct"),
 			APIKey:   valueOr(getenv, "LLM_API_KEY", "not-needed"),
 			JSONMode: true,
 		},

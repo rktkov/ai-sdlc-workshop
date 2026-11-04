@@ -23,7 +23,7 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LLM.BaseURL != "http://localhost:11434/v1" {
 		t.Fatalf("LLM.BaseURL = %q", cfg.LLM.BaseURL)
 	}
-	if cfg.LLM.Model != "lfm2.5-2.6b-instruct" {
+	if cfg.LLM.Model != "lfm2.5-1.2b-instruct" {
 		t.Fatalf("LLM.Model = %q", cfg.LLM.Model)
 	}
 	if !cfg.LLM.JSONMode {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Smoke complete on 2026-11-04. Recommendation ready. Awaiting owner confirmation of the default model.
+Confirmed on 2026-11-04. `LFM2.5-1.2B-Instruct QAD Q4_0` is the v1 default on the Intel target.
 
 ## Question
 
@@ -170,6 +170,17 @@ The smoke run used `llama-server` build 12110 on the target Intel laptop. It use
 | Peak memory was not captured | The 8 GB bar is not measured. |
 | Only one repetition per fixture | Variance and p95 are indicative, not final. |
 | `M4` and `M5` were not run | Their latency is bounded below by the failing 2.6B and 8B sizes. |
+
+## Decision
+
+The owner confirmed the recommendation on 2026-11-04:
+
+- `LFM2.5-1.2B-Instruct QAD Q4_0` is the v1 default on the Intel target.
+- `LFM2.5-2.6B` stays optional for Apple Silicon or a GPU host.
+- `LFM2.5-350M` stays a speed fallback only.
+- `.env.example` and `internal/config` now default to `lfm2.5-1.2b-instruct`.
+
+The rest of this section is the recommendation that led to the decision.
 
 ## Recommendation
 
