@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -283,5 +284,57 @@ func TestRecordGestureMissingAxis(t *testing.T) {
 	}
 	if _, err := service.Record(context.Background(), cmd); err == nil {
 		t.Fatal("Record(missing axis) = nil, want an error")
+	}
+}
+
+func TestColdPeriodLifecycle(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	now := time.Now().UTC()
+	repo := NewTasteRepository(db)
+	service := &taste.Service{Store: repo, Now: func() time.Time { return now }, Duration: 24 * time.Hour}
+	cmd := taste.Command{
+		GestureID: "g1", UserID: "owner", CardID: "c", VideoID: "v", ChannelID: "ch", Topic: "t",
+		Gesture: taste.GestureLeft, Reason: taste.ReasonMarketing,
+	}
+	if _, err := service.Record(context.Background(), cmd); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	active, err := repo.ListActiveColdPeriods(context.Background(), "owner")
+	if err != nil {
+		t.Fatalf("ListActive: %v", err)
+	}
+	if len(active) != 1 {
+		t.Fatalf("active = %d, want 1", len(active))
+	}
+
+	found, err := repo.FindColdPeriod(context.Background(), "owner", taste.ScopeChannel, "ch")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if found.ExpiresAt.Before(now) {
+		t.Fatalf("expiry = %v", found.ExpiresAt)
+	}
+
+	refresh := &taste.Service{Store: repo, Now: func() time.Time { return now.Add(2 * time.Hour) }, Duration: 48 * time.Hour}
+	cmd.GestureID = "g2"
+	if _, err := refresh.Record(context.Background(), cmd); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	refreshed, err := repo.FindColdPeriod(context.Background(), "owner", taste.ScopeChannel, "ch")
+	if err != nil {
+		t.Fatalf("Find refreshed: %v", err)
+	}
+	if !refreshed.ExpiresAt.After(found.ExpiresAt) {
+		t.Fatalf("expiry did not move: %v -> %v", found.ExpiresAt, refreshed.ExpiresAt)
+	}
+
+	if _, err := repo.FindColdPeriod(context.Background(), "owner", taste.ScopeTopic, "missing"); !errors.Is(err, taste.ErrColdPeriodNotFound) {
+		t.Fatalf("Find(missing) = %v", err)
 	}
 }

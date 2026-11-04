@@ -162,3 +162,35 @@ func TestRecordUpdatesWeights(t *testing.T) {
 		t.Fatalf("left update = %+v", store.updates)
 	}
 }
+
+func TestColdPeriodValidate(t *testing.T) {
+	now := time.Now().UTC()
+	valid := ColdPeriod{
+		ColdPeriodID: "c", UserID: "owner", Scope: ScopeChannel, Target: "ch",
+		Reason: ReasonMarketing, CreatedAt: now, ExpiresAt: now.Add(time.Hour), LastRefreshedAt: now,
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("Validate() = %v", err)
+	}
+
+	tests := []struct {
+		name string
+		edit func(*ColdPeriod)
+	}{
+		{name: "no user", edit: func(c *ColdPeriod) { c.UserID = "" }},
+		{name: "no target", edit: func(c *ColdPeriod) { c.Target = "" }},
+		{name: "bad reason", edit: func(c *ColdPeriod) { c.Reason = Reason("bad") }},
+		{name: "bad scope", edit: func(c *ColdPeriod) { c.Scope = Scope("bad") }},
+		{name: "scope mismatch", edit: func(c *ColdPeriod) { c.Scope = ScopeTopic }},
+		{name: "bad expiry", edit: func(c *ColdPeriod) { c.ExpiresAt = c.CreatedAt }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := valid
+			tt.edit(&c)
+			if err := c.Validate(); err == nil {
+				t.Fatal("Validate() = nil, want an error")
+			}
+		})
+	}
+}

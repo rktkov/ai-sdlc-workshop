@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/rktkov/ytfeed/internal/domain/taste"
 )
@@ -98,4 +99,54 @@ func (r *TasteRepository) RecordGesture(ctx context.Context, signal taste.Signal
 		return false, fmt.Errorf("commit gesture: %w", err)
 	}
 	return true, nil
+}
+
+// ListActiveColdPeriods returns the cold periods that have not expired.
+func (r *TasteRepository) ListActiveColdPeriods(ctx context.Context, userID string) ([]taste.ColdPeriod, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT cold_period_id, user_id, scope, target, reason,
+		created_at, expires_at, last_refreshed_at
+		FROM cold_periods WHERE user_id = ? AND expires_at > ?
+		ORDER BY expires_at`, userID, time.Now().UTC())
+	if err != nil {
+		return nil, fmt.Errorf("list cold periods: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var periods []taste.ColdPeriod
+	for rows.Next() {
+		var cold taste.ColdPeriod
+		var reason, scope string
+		if err := rows.Scan(&cold.ColdPeriodID, &cold.UserID, &scope, &cold.Target, &reason,
+			&cold.CreatedAt, &cold.ExpiresAt, &cold.LastRefreshedAt); err != nil {
+			return nil, fmt.Errorf("scan cold period: %w", err)
+		}
+		cold.Scope = taste.Scope(scope)
+		cold.Reason = taste.Reason(reason)
+		periods = append(periods, cold)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate cold periods: %w", err)
+	}
+	return periods, nil
+}
+
+// FindColdPeriod returns one cold period by target.
+func (r *TasteRepository) FindColdPeriod(ctx context.Context, userID string, scope taste.Scope, target string) (taste.ColdPeriod, error) {
+	var cold taste.ColdPeriod
+	var reason, storedScope string
+	err := r.db.QueryRowContext(ctx, `SELECT cold_period_id, user_id, scope, target, reason,
+		created_at, expires_at, last_refreshed_at
+		FROM cold_periods WHERE user_id = ? AND scope = ? AND target = ?`,
+		userID, string(scope), target,
+	).Scan(&cold.ColdPeriodID, &cold.UserID, &storedScope, &cold.Target, &reason,
+		&cold.CreatedAt, &cold.ExpiresAt, &cold.LastRefreshedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return taste.ColdPeriod{}, taste.ErrColdPeriodNotFound
+	}
+	if err != nil {
+		return taste.ColdPeriod{}, fmt.Errorf("find cold period: %w", err)
+	}
+	cold.Scope = taste.Scope(storedScope)
+	cold.Reason = taste.Reason(reason)
+	return cold, nil
 }

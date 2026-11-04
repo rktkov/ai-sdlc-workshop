@@ -83,6 +83,38 @@ type ColdPeriod struct {
 	LastRefreshedAt time.Time
 }
 
+// Validate checks the cold-period invariants.
+func (c ColdPeriod) Validate() error {
+	if strings.TrimSpace(c.UserID) == "" {
+		return fmt.Errorf("cold period has no user id")
+	}
+	if strings.TrimSpace(c.Target) == "" {
+		return fmt.Errorf("cold period has no target")
+	}
+	if !validReason(c.Reason) {
+		return fmt.Errorf("cold period has an invalid reason")
+	}
+	switch c.Scope {
+	case ScopeTopic, ScopeChannel:
+	default:
+		return fmt.Errorf("cold period has an invalid scope")
+	}
+	wantScope, _ := scopeFor(c.Reason, Command{ChannelID: c.Target, Topic: c.Target})
+	if c.Scope != wantScope {
+		return fmt.Errorf("cold period scope does not match its reason")
+	}
+	if c.CreatedAt.IsZero() || c.LastRefreshedAt.IsZero() {
+		return fmt.Errorf("cold period has no timestamps")
+	}
+	if !c.ExpiresAt.After(c.CreatedAt) {
+		return fmt.Errorf("cold period expires before it starts")
+	}
+	if c.LastRefreshedAt.Before(c.CreatedAt) {
+		return fmt.Errorf("cold period was refreshed before it started")
+	}
+	return nil
+}
+
 // Result is the outcome of a gesture.
 type Result struct {
 	Applied   bool
@@ -158,6 +190,9 @@ func (s *Service) Record(ctx context.Context, cmd Command) (Result, error) {
 			CreatedAt:       now,
 			ExpiresAt:       now.Add(duration),
 			LastRefreshedAt: now,
+		}
+		if err := cold.Validate(); err != nil {
+			return Result{}, err
 		}
 	}
 

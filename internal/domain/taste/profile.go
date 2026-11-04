@@ -7,7 +7,10 @@ import (
 )
 
 // ErrProfileNotFound means no profile exists for the user.
-var ErrProfileNotFound = errors.New("taste profile not found")
+var (
+	ErrProfileNotFound    = errors.New("taste profile not found")
+	ErrColdPeriodNotFound = errors.New("cold period not found")
+)
 
 // Axis is one evaluative dimension of a profile.
 type Axis struct {

@@ -20,10 +20,11 @@
 | `S-01` | DONE | 2026-11-04 | Confirmed: `LFM2.5-1.2B-Instruct QAD Q4_0` is the default. 2.6B and 3B fail latency; 350M fails quality. |
 | `T-020` | DONE | 2026-11-04 | Taste profile aggregate, validation, SQLite repository and migration v3. Happy and unhappy tests pass. |
 | `T-021` | DONE | 2026-11-04 | Signal scores, bounded ±0.05 weight update, clamp and migration v4. Happy and unhappy tests pass. |
+| `T-022` | DONE | 2026-11-04 | Cold-period validation, active query, find by target and refresh. Expired rows stay. Happy and unhappy tests pass. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. Next task: `T-022`.
+Definition of Done passes and the backlog is updated. Next task: `T-023`.
 
 ## Sprint 1
 
