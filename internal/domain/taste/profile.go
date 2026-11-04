@@ -67,21 +67,34 @@ func (p Profile) Validate() error {
 		}
 	}
 
-	if len(p.Interests) < 1 || len(p.Interests) > 10 {
-		return fmt.Errorf("profile needs 1 to 10 interests")
-	}
-	seenInterests := map[string]bool{}
-	for _, interest := range p.Interests {
-		slug := normalizeInterest(interest)
-		if slug == "" {
-			return fmt.Errorf("interest must not be empty")
-		}
-		if seenInterests[slug] {
-			return fmt.Errorf("interest %q is duplicated", interest)
-		}
-		seenInterests[slug] = true
+	if _, err := NormalizeInterests(p.Interests); err != nil {
+		return err
 	}
 	return nil
+}
+
+// NormalizeInterests validates and normalizes 1 to 10 interest slugs.
+func NormalizeInterests(values []string) ([]string, error) {
+	if len(values) < 1 || len(values) > 10 {
+		return nil, fmt.Errorf("profile needs 1 to 10 interests")
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		slug := normalizeInterest(value)
+		if slug == "" {
+			return nil, fmt.Errorf("interest must not be empty")
+		}
+		if len(slug) > 64 {
+			return nil, fmt.Errorf("interest %q is longer than 64 characters", value)
+		}
+		if seen[slug] {
+			return nil, fmt.Errorf("interest %q is duplicated", value)
+		}
+		seen[slug] = true
+		out = append(out, slug)
+	}
+	return out, nil
 }
 
 func normalizeName(value string) string {

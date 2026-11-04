@@ -169,3 +169,41 @@ func (r *ProfileRepository) fillExamples(ctx context.Context, userID string, axi
 	}
 	return nil
 }
+
+// SetInterests replaces the interest set for an existing profile.
+func (r *ProfileRepository) SetInterests(ctx context.Context, userID string, interests []string) error {
+	normalized, err := taste.NormalizeInterests(interests)
+	if err != nil {
+		return err
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin interests: %w", err)
+	}
+
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM taste_profiles WHERE user_id = ?`, userID).Scan(&exists); err != nil {
+		_ = tx.Rollback()
+		if errors.Is(err, sql.ErrNoRows) {
+			return taste.ErrProfileNotFound
+		}
+		return fmt.Errorf("find profile: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM taste_interests WHERE user_id = ?`, userID); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("clear interests: %w", err)
+	}
+	for position, slug := range normalized {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO taste_interests
+			(user_id, slug, position) VALUES (?, ?, ?)`, userID, slug, position,
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("insert interest %s: %w", slug, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit interests: %w", err)
+	}
+	return nil
+}

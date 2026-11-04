@@ -168,3 +168,103 @@ func TestProfileSaveErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestSetInterests(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	repo := NewProfileRepository(db)
+	profile := taste.Profile{
+		UserID:        "owner",
+		RubricVersion: "v1",
+		Axes: []taste.Axis{
+			{Name: "depth", Weight: 0.5, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+			{Name: "novelty", Weight: 0.5, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+			{Name: "clarity", Weight: 0.5, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+		},
+		Interests: []string{"old"},
+	}
+	if err := repo.Save(context.Background(), profile); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if err := repo.SetInterests(context.Background(), "owner", []string{" AI Agents ", "local_models"}); err != nil {
+		t.Fatalf("SetInterests: %v", err)
+	}
+	got, err := repo.Get(context.Background(), "owner")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.Interests) != 2 || got.Interests[0] != "ai-agents" || got.Interests[1] != "local-models" {
+		t.Fatalf("interests = %v", got.Interests)
+	}
+}
+
+func TestSetInterestsMissingProfile(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	if err := NewProfileRepository(db).SetInterests(context.Background(), "owner", []string{"ok"}); !errors.Is(err, taste.ErrProfileNotFound) {
+		t.Fatalf("SetInterests = %v, want ErrProfileNotFound", err)
+	}
+}
+
+func TestSetInterestsInvalid(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	repo := NewProfileRepository(db)
+	for _, interests := range [][]string{nil, {"a", "a"}} {
+		if err := repo.SetInterests(context.Background(), "owner", interests); err == nil {
+			t.Fatalf("SetInterests(%v) = nil, want an error", interests)
+		}
+	}
+}
+
+func TestSetInterestsStoreError(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	repo := NewProfileRepository(db)
+	profile := taste.Profile{
+		UserID:        "owner",
+		RubricVersion: "v1",
+		Axes: []taste.Axis{
+			{Name: "depth", Weight: 0.5, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+			{Name: "novelty", Weight: 0.5, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+			{Name: "clarity", Weight: 0.5, PositiveExamples: []string{"p"}, NegativeExamples: []string{"n"}},
+		},
+		Interests: []string{"old"},
+	}
+	if err := repo.Save(context.Background(), profile); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if _, err := db.Exec("DROP TABLE taste_interests"); err != nil {
+		t.Fatalf("drop interests: %v", err)
+	}
+	if err := repo.SetInterests(context.Background(), "owner", []string{"new"}); err == nil {
+		t.Fatal("SetInterests = nil, want an error")
+	}
+}
+
+func TestSetInterestsClosedDB(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	_ = db.Close()
+	if err := NewProfileRepository(db).SetInterests(context.Background(), "owner", []string{"ok"}); err == nil {
+		t.Fatal("SetInterests(closed) = nil, want an error")
+	}
+}

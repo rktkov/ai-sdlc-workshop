@@ -260,6 +260,8 @@ func TestRecordGestureScoreError(t *testing.T) {
 
 type ghostProfile struct{}
 
+func (ghostProfile) SetInterests(context.Context, string, []string) error { return nil }
+
 func (ghostProfile) Get(context.Context, string) (taste.Profile, error) {
 	return taste.Profile{
 		UserID: "owner",

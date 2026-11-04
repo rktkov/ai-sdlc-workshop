@@ -133,17 +133,42 @@ type Store interface {
 	RecordGesture(ctx context.Context, signal Signal, cold *ColdPeriod, updates []WeightUpdate) (bool, error)
 }
 
-// ProfileReader loads the profile used for the weight update.
-type ProfileReader interface {
+// ProfileStore loads and updates the profile.
+type ProfileStore interface {
 	Get(ctx context.Context, userID string) (Profile, error)
+	SetInterests(ctx context.Context, userID string, interests []string) error
 }
 
 // Service records gestures.
 type Service struct {
 	Store    Store
-	Profiles ProfileReader
+	Profiles ProfileStore
 	Now      func() time.Time
 	Duration time.Duration
+}
+
+// SetInterests replaces the interest set after validation.
+func (s *Service) SetInterests(ctx context.Context, userID string, interests []string) error {
+	if s.Profiles == nil {
+		return errors.New("profile store is nil")
+	}
+	normalized, err := NormalizeInterests(interests)
+	if err != nil {
+		return err
+	}
+	return s.Profiles.SetInterests(ctx, userID, normalized)
+}
+
+// Interests returns the stored interest set.
+func (s *Service) Interests(ctx context.Context, userID string) ([]string, error) {
+	if s.Profiles == nil {
+		return nil, errors.New("profile store is nil")
+	}
+	profile, err := s.Profiles.Get(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return append([]string(nil), profile.Interests...), nil
 }
 
 // Record validates and records one gesture.

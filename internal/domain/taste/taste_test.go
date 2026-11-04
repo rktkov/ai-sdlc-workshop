@@ -22,12 +22,21 @@ func (f *fakeStore) RecordGesture(_ context.Context, signal Signal, cold *ColdPe
 }
 
 type fakeProfiles struct {
-	profile Profile
-	err     error
+	profile   Profile
+	err       error
+	userID    string
+	interests []string
+	setErr    error
 }
 
 func (f *fakeProfiles) Get(context.Context, string) (Profile, error) {
 	return f.profile, f.err
+}
+
+func (f *fakeProfiles) SetInterests(_ context.Context, userID string, interests []string) error {
+	f.userID = userID
+	f.interests = append([]string(nil), interests...)
+	return f.setErr
 }
 
 func TestRecordLeftHappy(t *testing.T) {
@@ -237,3 +246,65 @@ func TestSnapshotUnhappy(t *testing.T) {
 type tasteError struct{}
 
 func (tasteError) Error() string { return "boom" }
+
+func TestSetInterestsHappy(t *testing.T) {
+	profiles := &fakeProfiles{profile: Profile{UserID: "owner", Interests: []string{"old"}}}
+	service := &Service{Profiles: profiles}
+	if err := service.SetInterests(context.Background(), "owner", []string{" AI Agents ", "local_models", "distributed systems"}); err != nil {
+		t.Fatalf("SetInterests: %v", err)
+	}
+	if profiles.userID != "owner" {
+		t.Fatalf("user id = %q", profiles.userID)
+	}
+	want := []string{"ai-agents", "local-models", "distributed-systems"}
+	if len(profiles.interests) != len(want) {
+		t.Fatalf("interests = %v", profiles.interests)
+	}
+	for i := range want {
+		if profiles.interests[i] != want[i] {
+			t.Fatalf("interests = %v, want %v", profiles.interests, want)
+		}
+	}
+}
+
+func TestSetInterestsUnhappy(t *testing.T) {
+	tests := []struct {
+		name      string
+		interests []string
+		setErr    error
+	}{
+		{name: "zero", interests: nil},
+		{name: "too many", interests: []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"}},
+		{name: "duplicate", interests: []string{"AI Agents", "ai-agents"}},
+		{name: "empty", interests: []string{"ok", " "}},
+		{name: "store error", interests: []string{"ok"}, setErr: tasteError{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &Service{Profiles: &fakeProfiles{setErr: tt.setErr}}
+			if err := service.SetInterests(context.Background(), "owner", tt.interests); err == nil {
+				t.Fatal("SetInterests = nil, want an error")
+			}
+		})
+	}
+	if err := (&Service{}).SetInterests(context.Background(), "owner", []string{"ok"}); err == nil {
+		t.Fatal("SetInterests(nil reader) = nil, want an error")
+	}
+}
+
+func TestInterests(t *testing.T) {
+	service := &Service{Profiles: &fakeProfiles{profile: Profile{Interests: []string{"a", "b"}}}}
+	got, err := service.Interests(context.Background(), "owner")
+	if err != nil {
+		t.Fatalf("Interests: %v", err)
+	}
+	if len(got) != 2 || got[0] != "a" {
+		t.Fatalf("interests = %v", got)
+	}
+	if _, err := (&Service{Profiles: &fakeProfiles{err: tasteError{}}}).Interests(context.Background(), "owner"); err == nil {
+		t.Fatal("Interests(error) = nil, want an error")
+	}
+	if _, err := (&Service{}).Interests(context.Background(), "owner"); err == nil {
+		t.Fatal("Interests(nil reader) = nil, want an error")
+	}
+}
