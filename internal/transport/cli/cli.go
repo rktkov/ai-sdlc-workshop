@@ -4,7 +4,6 @@ package cli
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,7 +19,6 @@ import (
 	"github.com/rktkov/ytfeed/internal/repository/sqlite"
 	"github.com/rktkov/ytfeed/internal/repository/tokenfile"
 	"github.com/rktkov/ytfeed/internal/storage"
-	"github.com/rktkov/ytfeed/internal/transport/contract"
 	httpapi "github.com/rktkov/ytfeed/internal/transport/http"
 )
 
@@ -216,57 +214,7 @@ func authError(command string, stderr io.Writer, err error) int {
 }
 
 func runDoctor(ctx context.Context, getenv func(string) string, stdout, stderr io.Writer, baseURL string) int {
-	cfg, err := config.Load(getenv)
-	if err != nil {
-		_, _ = fmt.Fprintln(stderr, err)
-		return 2
-	}
-
-	token, err := httpapi.LoadOrCreateToken(cfg.Storage.DataDir)
-	if err != nil {
-		_, _ = fmt.Fprintln(stderr, err)
-		return 1
-	}
-
-	if baseURL == "" {
-		baseURL = defaultBaseURL
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1/health", nil)
-	if err != nil {
-		_, _ = fmt.Fprintln(stderr, err)
-		return 1
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "ytfeed doctor: server unavailable: %v\n", err)
-		return 1
-	}
-	defer func() { _ = resp.Body.Close() }() // response body, no recovery path
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		_, _ = fmt.Fprintln(stderr, "ytfeed doctor: unauthorized; check the API token")
-		return 2
-	}
-	if resp.StatusCode != http.StatusOK {
-		_, _ = fmt.Fprintf(stderr, "ytfeed doctor: server returned %d\n", resp.StatusCode)
-		return 1
-	}
-
-	var health contract.Health
-	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
-		_, _ = fmt.Fprintf(stderr, "ytfeed doctor: decode health: %v\n", err)
-		return 1
-	}
-	if err := health.Validate(); err != nil {
-		_, _ = fmt.Fprintf(stderr, "ytfeed doctor: invalid health: %v\n", err)
-		return 1
-	}
-
-	_, _ = fmt.Fprintf(stdout, "ok version=%s schema=%d\n", health.Version, health.SchemaVersion)
-	return 0
+	return runDoctorWith(ctx, getenv, stdout, stderr, baseURL, doctorDeps{})
 }
 
 func runServe(ctx context.Context, args []string, getenv func(string) string, stderr io.Writer) int {
@@ -321,7 +269,13 @@ func runServeWith(ctx context.Context, args []string, getenv func(string) string
 		Store:    sqlite.NewTasteRepository(db),
 		Profiles: sqlite.NewProfileRepository(db),
 	}
-	handler := httpapi.HandlerWithGestureRemote(token, Version, schemaVersion, httpapi.GestureHandler(tasteService, "owner"), allowRemote)
+	cachedFeed := httpapi.CachedFeedProvider{Store: sqlite.NewBatchRepository(db), UserID: "owner"}
+	handler := httpapi.HandlerWithFeatures(
+		token, Version, schemaVersion,
+		httpapi.GestureHandler(tasteService, "owner"),
+		httpapi.FeedHandler(cachedFeed),
+		allowRemote,
+	)
 
 	server := &http.Server{
 		Addr:              address,

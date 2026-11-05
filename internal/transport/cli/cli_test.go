@@ -54,8 +54,11 @@ func TestDoctorUnhappy(t *testing.T) {
 
 		var out, errOut bytes.Buffer
 		code := Run(context.Background(), []string{"doctor"}, env(dir), &out, &errOut, "http://127.0.0.1:1")
-		if code != 1 {
-			t.Fatalf("exit = %d, want 1; stderr = %s", code, errOut.String())
+		if code != 0 {
+			t.Fatalf("exit = %d, want 0; stderr = %s", code, errOut.String())
+		}
+		if !bytes.Contains(out.Bytes(), []byte("server: unavailable")) {
+			t.Fatalf("stdout = %q", out.String())
 		}
 	})
 }
@@ -172,8 +175,8 @@ func TestDoctorBadBaseURL(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	if code := Run(context.Background(), []string{"doctor"}, env(dir), &out, &errOut, "://bad"); code != 1 {
-		t.Fatalf("exit = %d, want 1", code)
+	if code := Run(context.Background(), []string{"doctor"}, env(dir), &out, &errOut, "://bad"); code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
 	}
 }
 
@@ -188,8 +191,8 @@ func TestDoctorServerError(t *testing.T) {
 	defer server.Close()
 
 	var out, errOut bytes.Buffer
-	if code := Run(context.Background(), []string{"doctor"}, env(dir), &out, &errOut, server.URL); code != 1 {
-		t.Fatalf("exit = %d, want 1", code)
+	if code := Run(context.Background(), []string{"doctor"}, env(dir), &out, &errOut, server.URL); code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
 	}
 }
 
@@ -217,8 +220,8 @@ func TestDoctorTokenError(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	if code := Run(context.Background(), []string{"doctor"}, env(dir), &out, &errOut, "http://127.0.0.1:1"); code != 1 {
-		t.Fatalf("exit = %d, want 1", code)
+	if code := Run(context.Background(), []string{"doctor"}, env(dir), &out, &errOut, "http://127.0.0.1:1"); code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
 	}
 }
 
