@@ -108,8 +108,13 @@ model calls still need the owner's consent and local binaries.
 
 **E5 status:** `T-040`…`T-045` are `DONE` (2026-11-05). Batch order, sessions, gestures,
 feed streaming, library and playback pass their unit and contract tests. The feed stream
-is not yet wired into `ytfeed serve`, and the library/playback commands are not yet wired
-to the HTTP API. That integration belongs to the final assembly.
+is now wired into `serve` through the cached-feed provider. The library/playback commands
+are not yet wired to the HTTP API.
+
+**E6 status:** `T-050`…`T-055` are `DONE` (2026-11-05). Local diagnostics, stats, traces,
+weekly rating, cached feed and the final coverage gate pass. The live Google/yt-dlp/model
+run, stats/rating UI wiring and trace call sites remain open. See
+[`e6-final-audit.md`](e6-final-audit.md).
 
 ## 8. Day 3 — loop and quality
 
@@ -182,3 +187,9 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-05 | `T-043` | DONE. SSE feed stream, JSON object output and text card fallback. |
 | 2026-11-05 | `T-044` | DONE. Library saved/downloaded states, explicit download, video-id file naming and migration v9. |
 | 2026-11-05 | `T-045` | DONE. Playback through `PLAYER_CMD` or the OS default, async launch. |
+| 2026-11-05 | `T-050` | DONE. `doctor` local diagnostics, redaction and offline behavior. |
+| 2026-11-05 | `T-051` | DONE. Read-only stats projection over signals, cold periods and quota. |
+| 2026-11-05 | `T-052` | DONE. Local JSONL traces with rotation, retention and a content denylist. |
+| 2026-11-05 | `T-053` | DONE. Weekly rating with ISO weeks, batch IDs, `unrated` and migration v10. |
+| 2026-11-05 | `T-054` | DONE. Cached feed, degradation banner, batch snapshots and zero-refetch resume. |
+| 2026-11-05 | `T-055` | DONE. Final check, coverage and integration gate pass. See `e6-final-audit.md`. |

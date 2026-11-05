@@ -43,10 +43,16 @@
 | `T-043` | DONE | 2026-11-05 | Feed stream: SSE `batch.started`/`card.upsert`/`batch.done`, one JSON object with `--json` and text card fallback. |
 | `T-044` | DONE | 2026-11-05 | Library: saved/downloaded states, explicit download, file by `video_id`, remove and list. Migration v9. |
 | `T-045` | DONE | 2026-11-05 | Playback: `PLAYER_CMD` or OS default, async launch, file checks and library open. |
+| `T-050` | DONE | 2026-11-05 | `doctor` reports data dir, DB/schema, API and OAuth tokens, quota, yt-dlp, LLM, terminal images and server state. Redacts secrets and runs offline. |
+| `T-051` | DONE | 2026-11-05 | Read-only stats: swipes, reasons, cold periods, quota trend and top topics. |
+| `T-052` | DONE | 2026-11-05 | Local JSONL traces with daily files, 0600 permissions, 7-day sweep and a content/secret denylist. |
+| `T-053` | DONE | 2026-11-05 | Weekly rating: one row per ISO week, -1/0/+1/unrated, batch IDs and idempotent duplicates. Migration v10. |
+| `T-054` | DONE | 2026-11-05 | Cached feed, degradation banner, batch snapshots and zero-refetch resume. Migration v11 and E2E tests. |
+| `T-055` | DONE | 2026-11-05 | Final gate: `make check`, `make coverage-check` and `make test-e2e` pass. Integration uses fakes; live data remains open. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. Next task: `T-050`.
+Definition of Done passes and the backlog is updated. The implementation backlog is complete. Live verification remains open.
 
 ## Sprint 1
 
