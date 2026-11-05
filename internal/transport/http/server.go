@@ -28,10 +28,18 @@ func HandlerWithGesture(token, version string, schemaVersion int, gesture http.H
 
 // HandlerWithGestureRemote adds the gesture endpoint and optional remote bind.
 func HandlerWithGestureRemote(token, version string, schemaVersion int, gesture http.HandlerFunc, allowRemote bool) http.Handler {
+	return HandlerWithFeatures(token, version, schemaVersion, gesture, nil, allowRemote)
+}
+
+// HandlerWithFeatures adds the gesture and feed endpoints.
+func HandlerWithFeatures(token, version string, schemaVersion int, gesture, feedHandler http.HandlerFunc, allowRemote bool) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", health(version, schemaVersion))
 	if gesture != nil {
 		mux.HandleFunc("/v1/gestures", gesture)
+	}
+	if feedHandler != nil {
+		mux.HandleFunc("/v1/feed", feedHandler)
 	}
 	if allowRemote {
 		return auth(token, mux)

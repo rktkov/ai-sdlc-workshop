@@ -110,24 +110,36 @@ func renderFeedSSE(body io.Reader, stdout, stderr io.Writer) int {
 		case strings.HasPrefix(line, "event: "):
 			event = strings.TrimPrefix(line, "event: ")
 		case strings.HasPrefix(line, "data: "):
-			if event != "card.upsert" {
-				continue
+			data := []byte(strings.TrimPrefix(line, "data: "))
+			switch event {
+			case "batch.started":
+				var start struct {
+					Banner string `json:"banner"`
+				}
+				if err := json.Unmarshal(data, &start); err != nil {
+					_, _ = fmt.Fprintf(stderr, "ytfeed feed: decode batch: %v\n", err)
+					return 1
+				}
+				if start.Banner != "" {
+					_, _ = fmt.Fprintf(stdout, "banner: %s\n", start.Banner)
+				}
+			case "card.upsert":
+				var wire contract.FeedCard
+				if err := json.Unmarshal(data, &wire); err != nil {
+					_, _ = fmt.Fprintf(stderr, "ytfeed feed: decode card: %v\n", err)
+					return 1
+				}
+				card, err := cardFromWire(wire)
+				if err != nil {
+					_, _ = fmt.Fprintf(stderr, "ytfeed feed: invalid card: %v\n", err)
+					return 1
+				}
+				if err := RenderCard(stdout, card); err != nil {
+					_, _ = fmt.Fprintf(stderr, "ytfeed feed: render card: %v\n", err)
+					return 1
+				}
+				_, _ = fmt.Fprintln(stdout)
 			}
-			var wire contract.FeedCard
-			if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &wire); err != nil {
-				_, _ = fmt.Fprintf(stderr, "ytfeed feed: decode card: %v\n", err)
-				return 1
-			}
-			card, err := cardFromWire(wire)
-			if err != nil {
-				_, _ = fmt.Fprintf(stderr, "ytfeed feed: invalid card: %v\n", err)
-				return 1
-			}
-			if err := RenderCard(stdout, card); err != nil {
-				_, _ = fmt.Fprintf(stderr, "ytfeed feed: render card: %v\n", err)
-				return 1
-			}
-			_, _ = fmt.Fprintln(stdout)
 		}
 	}
 	if err := scanner.Err(); err != nil {

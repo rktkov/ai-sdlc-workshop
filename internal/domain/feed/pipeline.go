@@ -43,6 +43,7 @@ type Pipeline struct {
 	MicroTarget   float64
 	RubricVersion string
 	ModelID       string
+	BatchID       string
 	Staging       bool
 	Exclusions    discovery.ExclusionSet
 
@@ -62,6 +63,7 @@ type Pipeline struct {
 type Result struct {
 	Selection discovery.Selection
 	Analyses  []analysis.Analysis
+	Batch     Batch
 	Shortfall string
 }
 
@@ -102,7 +104,15 @@ func (p *Pipeline) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Selection: selection, Analyses: analyses, Shortfall: selection.Shortfall}, nil
+	byVideo := make(map[string]analysis.Analysis, len(analyses))
+	for _, value := range analyses {
+		byVideo[value.VideoID] = value
+	}
+	batch, err := ComposeBatch(p.batchID(), p.UserID, p.Size, selection.Selected, byVideo)
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Selection: selection, Analyses: analyses, Batch: batch, Shortfall: selection.Shortfall}, nil
 }
 
 func (p *Pipeline) validate() error {
@@ -348,6 +358,13 @@ func (p *Pipeline) now() time.Time {
 		return time.Now().UTC()
 	}
 	return p.Now().UTC()
+}
+
+func (p *Pipeline) batchID() string {
+	if p.BatchID != "" {
+		return p.BatchID
+	}
+	return fmt.Sprintf("batch-%d", p.now().UnixNano())
 }
 
 func (p *Pipeline) modelID() string {

@@ -62,3 +62,14 @@ func TestFeedValidateUnhappy(t *testing.T) {
 		})
 	}
 }
+
+func TestFeedBanner(t *testing.T) {
+	batch := feed.Batch{
+		ID: "b", State: feed.BatchDegraded, DegradationReason: feed.DegradeQuota,
+		Cards: []feed.Card{{CardID: "c", VideoID: "v", Title: "t", Channel: "ch", State: feed.StatePending, Position: 0}},
+	}
+	got := FeedFromBatch(batch)
+	if got.DegradationReason != "quota_exhausted" || got.Banner == "" {
+		t.Fatalf("feed = %+v", got)
+	}
+}

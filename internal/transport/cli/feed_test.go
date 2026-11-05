@@ -126,3 +126,21 @@ func TestFeedUnhappy(t *testing.T) {
 		}
 	})
 }
+
+func TestFeedSSEBanner(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, `event: batch.started`+"\n"+`data: {"banner":"quota exhausted — cached feed"}`+"\n\n")
+		_, _ = fmt.Fprint(w, "event: batch.done\ndata: {}\n\n")
+	}))
+	defer server.Close()
+
+	var out, errOut bytes.Buffer
+	code := Run(context.Background(), []string{"feed"}, feedTestEnv(t), &out, &errOut, server.URL)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "banner: quota exhausted") {
+		t.Fatalf("stdout = %q", out.String())
+	}
+}

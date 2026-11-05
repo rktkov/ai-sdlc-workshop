@@ -16,6 +16,25 @@ type FeedProvider interface {
 	Feed(ctx context.Context, userID string) (feed.Batch, error)
 }
 
+// FeedStore reads the latest completed batch.
+type FeedStore interface {
+	LatestCompleted(ctx context.Context, userID string) (feed.Batch, error)
+}
+
+// CachedFeedProvider serves the latest completed batch.
+type CachedFeedProvider struct {
+	Store  FeedStore
+	UserID string
+}
+
+// Feed returns the cached batch for the configured user.
+func (p CachedFeedProvider) Feed(ctx context.Context, _ string) (feed.Batch, error) {
+	if p.Store == nil {
+		return feed.Batch{}, feed.ErrNoCachedFeed
+	}
+	return p.Store.LatestCompleted(ctx, p.UserID)
+}
+
 // FeedHandler streams one batch as SSE or returns one JSON object.
 func FeedHandler(provider FeedProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +88,7 @@ func streamFeed(w http.ResponseWriter, payload contract.Feed) {
 
 	writeEvent(w, flusher, "batch.started", map[string]any{
 		"batch_id": payload.BatchID, "state": payload.State, "size": len(payload.Cards),
+		"banner": payload.Banner, "degradation_reason": payload.DegradationReason,
 	})
 	for _, card := range payload.Cards {
 		writeEvent(w, flusher, "card.upsert", card)

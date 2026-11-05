@@ -33,14 +33,21 @@ type FeedCard struct {
 
 // Feed is one batch response.
 type Feed struct {
-	BatchID string     `json:"batch_id"`
-	State   string     `json:"state"`
-	Cards   []FeedCard `json:"cards"`
+	BatchID           string     `json:"batch_id"`
+	State             string     `json:"state"`
+	DegradationReason string     `json:"degradation_reason,omitempty"`
+	Banner            string     `json:"banner,omitempty"`
+	Cards             []FeedCard `json:"cards"`
 }
 
 // FeedFromBatch maps a feed batch to the wire contract.
 func FeedFromBatch(batch feed.Batch) Feed {
-	out := Feed{BatchID: batch.ID, State: string(batch.State), Cards: make([]FeedCard, 0, len(batch.Cards))}
+	out := Feed{
+		BatchID: batch.ID, State: string(batch.State),
+		DegradationReason: string(batch.DegradationReason),
+		Banner:            bannerFor(batch),
+		Cards:             make([]FeedCard, 0, len(batch.Cards)),
+	}
 	for _, card := range batch.Cards {
 		out.Cards = append(out.Cards, FeedCard{
 			CardID: card.CardID, VideoID: card.VideoID, ChannelID: card.ChannelID,
@@ -54,6 +61,24 @@ func FeedFromBatch(batch feed.Batch) Feed {
 		})
 	}
 	return out
+}
+
+func bannerFor(batch feed.Batch) string {
+	if batch.State != feed.BatchDegraded {
+		return ""
+	}
+	switch batch.DegradationReason {
+	case feed.DegradeQuota:
+		return "quota exhausted — cached feed"
+	case feed.DegradeNetwork:
+		return "network unavailable — cached feed"
+	case feed.DegradeYTDLP:
+		return "yt-dlp missing — saved videos only"
+	case feed.DegradePartial:
+		return "partial feed"
+	default:
+		return "degraded feed"
+	}
 }
 
 // Validate checks the feed contract.
