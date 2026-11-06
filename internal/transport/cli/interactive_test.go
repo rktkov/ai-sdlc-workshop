@@ -382,7 +382,7 @@ func TestInteractiveRefreshStreamErrors(t *testing.T) {
 }
 
 func TestFetchInteractiveFeedBadURL(t *testing.T) {
-	if _, err := fetchInteractiveFeed(context.Background(), "token", "://bad", discovery.RefreshMixed, io.Discard); err == nil {
+	if _, err := fetchInteractiveFeed(context.Background(), "token", "://bad", discovery.RefreshMixed, io.Discard, nil); err == nil {
 		t.Fatal("fetchInteractiveFeed = nil, want an error")
 	}
 }
@@ -430,5 +430,49 @@ func TestApplyInteractiveCardUpsert(t *testing.T) {
 	}
 	if len(payload.Cards) != 0 {
 		t.Fatalf("cards were not reset: %+v", payload.Cards)
+	}
+}
+
+func TestRenderComposition(t *testing.T) {
+	var out bytes.Buffer
+	renderComposition(&out, contract.Feed{
+		Banner: "only 2 of 20 unseen videos available — no repeats",
+		Cards: []contract.FeedCard{
+			{CardID: "c1", Title: "One", State: "pending"},
+			{CardID: "c2", Title: "Two", State: "analyzed", Topic: "ai", Score: 0.8},
+		},
+	}, "analyzing: v2")
+	text := out.String()
+	for _, want := range []string{"Composing 2 cards", "! only 2 of 20", "· analyzing: v2", "[pending] One", "[analyzed] Two — ai (0.80)"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestFetchInteractiveFeedViewsUpdates(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "event: batch.started\ndata: {\"batch_id\":\"b1\",\"state\":\"streaming\"}\n\n")
+		_, _ = fmt.Fprint(w, "event: card.upsert\ndata: {\"card_id\":\"c1\",\"video_id\":\"v1\",\"title\":\"One\",\"state\":\"pending\",\"position\":0}\n\n")
+		_, _ = fmt.Fprint(w, "event: card.upsert\ndata: {\"card_id\":\"c1\",\"video_id\":\"v1\",\"title\":\"One\",\"state\":\"analyzed\",\"topic\":\"ai\",\"position\":0}\n\n")
+		_, _ = fmt.Fprint(w, "event: batch.done\ndata: {\"batch_id\":\"b1\",\"state\":\"completed\"}\n\n")
+	}))
+	defer server.Close()
+	var views []contract.Feed
+	value, err := fetchInteractiveFeed(context.Background(), "token", server.URL, discovery.RefreshMixed, io.Discard, func(payload contract.Feed, _ string) {
+		views = append(views, payload)
+	})
+	if err != nil {
+		t.Fatalf("fetchInteractiveFeed: %v", err)
+	}
+	if len(views) < 2 {
+		t.Fatalf("views = %d, want at least 2", len(views))
+	}
+	if len(views[len(views)-1].Cards) != 1 || views[len(views)-1].Cards[0].State != "analyzed" {
+		t.Fatalf("last view = %+v", views[len(views)-1])
+	}
+	if len(value.Cards) != 1 || value.Cards[0].State != "analyzed" {
+		t.Fatalf("final = %+v", value)
 	}
 }

@@ -57,7 +57,7 @@ func renderFeedInteractive(ctx context.Context, token, baseURL, defaultSource st
 			if strings.EqualFold(key, "r") || strings.EqualFold(key, "refresh") {
 				if chosen, ok := chooseRefreshSource(reader, raw, stdout, lastSource); ok {
 					lastSource = chosen
-					payload, index = refreshInteractiveFeed(ctx, token, baseURL, lastSource, stdout, stderr, payload)
+					payload, index = refreshInteractiveFeed(ctx, token, baseURL, lastSource, raw, stdout, stderr, payload, index)
 				}
 			}
 			continue
@@ -70,7 +70,7 @@ func renderFeedInteractive(ctx context.Context, token, baseURL, defaultSource st
 		if strings.EqualFold(key, "r") || strings.EqualFold(key, "refresh") {
 			if chosen, ok := chooseRefreshSource(reader, raw, stdout, lastSource); ok {
 				lastSource = chosen
-				payload, index = refreshInteractiveFeed(ctx, token, baseURL, lastSource, stdout, stderr, payload)
+				payload, index = refreshInteractiveFeed(ctx, token, baseURL, lastSource, raw, stdout, stderr, payload, index)
 			}
 			continue
 		}
@@ -82,17 +82,21 @@ func renderFeedInteractive(ctx context.Context, token, baseURL, defaultSource st
 	}
 }
 
-func refreshInteractiveFeed(ctx context.Context, token, baseURL string, source discovery.RefreshSource, stdout, stderr io.Writer, current contract.Feed) (contract.Feed, int) {
+func refreshInteractiveFeed(ctx context.Context, token, baseURL string, source discovery.RefreshSource, raw bool, stdout, stderr io.Writer, current contract.Feed, currentIndex int) (contract.Feed, int) {
 	_, _ = fmt.Fprintf(stdout, "composing a new batch with source %s...\n", source)
-	value, err := fetchInteractiveFeed(ctx, token, baseURL, source, stderr)
+	var view func(contract.Feed, string)
+	if raw {
+		view = func(value contract.Feed, message string) { renderComposition(stdout, value, message) }
+	}
+	value, err := fetchInteractiveFeed(ctx, token, baseURL, source, stderr, view)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "ytfeed feed: refresh failed: %v\n", err)
-		return current, 0
+		return current, currentIndex
 	}
 	return value, 0
 }
 
-func fetchInteractiveFeed(ctx context.Context, token, baseURL string, source discovery.RefreshSource, stderr io.Writer) (contract.Feed, error) {
+func fetchInteractiveFeed(ctx context.Context, token, baseURL string, source discovery.RefreshSource, stderr io.Writer, view func(contract.Feed, string)) (contract.Feed, error) {
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
@@ -118,15 +122,32 @@ func fetchInteractiveFeed(ctx context.Context, token, baseURL string, source dis
 	var payload contract.Feed
 	scanner := bufio.NewScanner(resp.Body)
 	event := ""
+	lastMessage := ""
 	for scanner.Scan() {
 		line := scanner.Text()
 		switch {
 		case strings.HasPrefix(line, "event: "):
 			event = strings.TrimPrefix(line, "event: ")
 		case strings.HasPrefix(line, "data: "):
-			done, err := applyInteractiveEvent(event, []byte(strings.TrimPrefix(line, "data: ")), &payload, stderr)
+			data := []byte(strings.TrimPrefix(line, "data: "))
+			if event == "progress" {
+				var progress struct {
+					Message string `json:"message"`
+				}
+				if err := json.Unmarshal(data, &progress); err == nil && progress.Message != "" {
+					lastMessage = progress.Message
+					if view == nil {
+						_, _ = fmt.Fprintf(stderr, "· %s\n", progress.Message)
+					}
+				}
+				continue
+			}
+			done, err := applyInteractiveEvent(event, data, &payload, stderr)
 			if err != nil {
 				return contract.Feed{}, err
+			}
+			if view != nil && (event == "batch.started" || event == "card.upsert") {
+				view(payload, lastMessage)
 			}
 			if done {
 				return payload, nil
@@ -292,6 +313,28 @@ func applyGesture(ctx context.Context, token, baseURL string, cards *[]contract.
 		(*cards)[index].Decision = "saved"
 	}
 	return true
+}
+
+func renderComposition(w io.Writer, payload contract.Feed, message string) {
+	_, _ = fmt.Fprint(w, "\033[2J\033[H")
+	_, _ = fmt.Fprintf(w, "Composing %d cards...\n", len(payload.Cards))
+	if payload.Banner != "" {
+		_, _ = fmt.Fprintf(w, "! %s\n", payload.Banner)
+	}
+	if message != "" {
+		_, _ = fmt.Fprintf(w, "· %s\n", message)
+	}
+	_, _ = fmt.Fprintln(w)
+	for index, card := range payload.Cards {
+		line := fmt.Sprintf("%2d. [%s] %s", index+1, card.State, card.Title)
+		if card.Topic != "" {
+			line += " — " + card.Topic
+		}
+		if card.Score > 0 {
+			line += fmt.Sprintf(" (%.2f)", card.Score)
+		}
+		_, _ = fmt.Fprintln(w, line)
+	}
 }
 
 func renderInteractiveCard(w io.Writer, card contract.FeedCard, index, total int, clear bool) {

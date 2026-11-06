@@ -55,6 +55,7 @@
 | `T-062` | DONE | 2026-11-06 | Source modes run search, trending and graph in the pipeline. Graph reads uploads from subscribed and related channels. |
 | `T-064` | DONE | 2026-11-06 | Per-channel cap, search/graph expansion, source rotation and the unseen shortfall banner. |
 | `T-065` | DONE | 2026-11-07 | Pending batch saved and streamed first. Concurrent analysis streams analyzed card updates before `batch.done`. |
+| `T-066` | DONE | 2026-11-07 | Live composition view updates cards in place. The source picker keeps the last choice. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
