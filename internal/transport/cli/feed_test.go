@@ -144,3 +144,32 @@ func TestFeedSSEBanner(t *testing.T) {
 		t.Fatalf("stdout = %q", out.String())
 	}
 }
+
+func TestFeedOnboardingErrors(t *testing.T) {
+	tests := []struct {
+		status int
+		code   string
+		text   string
+	}{
+		{status: 401, code: "not_authenticated", text: "ytfeed onboard"},
+		{status: 409, code: "interests_not_set", text: "interests not set"},
+		{status: 409, code: "profile_not_set", text: "taste profile not set"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.code, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = fmt.Fprintf(w, `{"error":%q}`, tt.code)
+			}))
+			defer server.Close()
+			var out, errOut bytes.Buffer
+			if code := Run(context.Background(), []string{"feed"}, feedTestEnv(t), &out, &errOut, server.URL); code != 2 {
+				t.Fatalf("exit = %d, want 2", code)
+			}
+			if !strings.Contains(errOut.String(), tt.text) {
+				t.Fatalf("stderr = %q, want %q", errOut.String(), tt.text)
+			}
+		})
+	}
+}

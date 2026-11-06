@@ -269,7 +269,11 @@ func runServeWith(ctx context.Context, args []string, getenv func(string) string
 		Store:    sqlite.NewTasteRepository(db),
 		Profiles: sqlite.NewProfileRepository(db),
 	}
-	cachedFeed := httpapi.CachedFeedProvider{Store: sqlite.NewBatchRepository(db), UserID: "owner"}
+	cachedFeed := httpapi.LiveFeedProvider{
+		Store:    sqlite.NewBatchRepository(db),
+		Composer: newLiveComposer(cfg, db),
+		UserID:   "owner",
+	}
 	handler := httpapi.HandlerWithFeatures(
 		token, Version, schemaVersion,
 		httpapi.GestureHandler(tasteService, "owner"),

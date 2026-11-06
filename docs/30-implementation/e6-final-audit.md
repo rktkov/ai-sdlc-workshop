@@ -49,14 +49,16 @@ download or a live model call. Those need the owner at the browser and local bin
 
 ## Open items
 
-1. **Live consent.** The OAuth flow has never completed against Google. E2 answers need
-   the owner's browser action.
-2. **Live composition.** The E4 pipeline is not yet connected to `ytfeed serve` or the
-   `feed` command. `serve` can serve a saved batch, but nothing composes and saves one.
+1. **Live consent — closed 2026-11-05.** `ytfeed auth status` reported `status=active`
+   with the `youtube.readonly` scope and a stored `0600` token.
+2. **Live composition — closed 2026-11-06.** `serve` now composes and saves a batch when
+   no cached batch exists. `LiveFeedProvider` serves the cache first and calls
+   `liveComposer` only when needed. The composer builds the E4 pipeline from config and
+   saves the batch snapshot.
 3. **Stats and rating UI.** `T-051` and `T-053` have domain and SQLite tests. The
    `ytfeed stats` and weekly prompt are not wired to the CLI or HTTP API.
 4. **Trace wiring.** `T-052` writes spans, but the pipeline and transport do not call the
    trace logger yet.
 5. **Real model.** `T-035` is tested with an OpenAI-compatible fake. The S-01 spike
-   measured `llama-server`, but the product pipeline has not called it.
+   measured `llama-server`, but the product pipeline has not called it in a live run.
 6. **`OQ-22`.** The onboarding profile is still the provisional `spike-s01` profile.

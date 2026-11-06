@@ -2,11 +2,11 @@
 
 ## Status
 
-`T-010`…`T-014` implemented on 2026-11-04. The flow uses PKCE S256, the
-`youtube.readonly` scope and a loopback redirect on `127.0.0.1`. `T-011` stores the token
-at `<data>/token` with `0600` and refreshes it once for concurrent callers. `T-012` imports
-subscriptions. `T-014` orchestrates onboarding and stores interests. The real consent is
-the remaining check.
+`T-010`…`T-014` implemented on 2026-11-04. Live consent completed on 2026-11-05.
+The flow uses PKCE S256, the `youtube.readonly` scope and a loopback redirect on
+`127.0.0.1`. `T-011` stores the token at `<data>/token` with `0600` and refreshes it once
+for concurrent callers. `T-012` imports subscriptions. `T-014` orchestrates onboarding and
+stores interests.
 
 ## Location
 
@@ -89,6 +89,7 @@ with a different client.
 | 2026-11-04 | `ytfeed auth login --no-browser` started. The URL was issued. No callback arrived within two minutes. Exit `2`. |
 | 2026-11-04 | Retried with a fresh URL and port. No callback arrived within two minutes. Exit `2`. |
 | 2026-11-04 | Full `ytfeed onboard --source subscriptions-only --no-browser` started. No callback arrived within two minutes. Exit `2`. The onboarding timeout now reports `ytfeed onboard`, not `ytfeed auth login`. |
+| 2026-11-05 | Live consent completed. `ytfeed auth status` reported `status=active` with the `youtube.readonly` scope and a token fingerprint. The token is stored at `data/token` with `0600`. |
 
 The flow and the callback are ready. The owner must open the URL in a browser on this Mac
 and approve the scope within the two-minute window. Then `T-011` can store the token.

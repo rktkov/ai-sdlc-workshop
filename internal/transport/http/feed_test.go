@@ -200,3 +200,74 @@ func TestCachedFeedMissing(t *testing.T) {
 		t.Fatalf("Feed = %v, want ErrNoCachedFeed", err)
 	}
 }
+
+type stubComposer struct {
+	batch feed.Batch
+	err   error
+	calls int
+}
+
+func (s *stubComposer) Compose(context.Context, string) (feed.Batch, error) {
+	s.calls++
+	return s.batch, s.err
+}
+
+func TestLiveFeedProviderCached(t *testing.T) {
+	composer := &stubComposer{}
+	provider := LiveFeedProvider{Store: stubFeedStore{batch: feedBatch()}, Composer: composer, UserID: "owner"}
+	got, err := provider.Feed(context.Background(), "owner")
+	if err != nil {
+		t.Fatalf("Feed: %v", err)
+	}
+	if got.ID != "b1" || composer.calls != 0 {
+		t.Fatalf("batch = %+v, compose calls = %d", got, composer.calls)
+	}
+}
+
+func TestLiveFeedProviderCompose(t *testing.T) {
+	composer := &stubComposer{batch: feedBatch()}
+	provider := LiveFeedProvider{Store: stubFeedStore{err: feed.ErrNoCachedFeed}, Composer: composer, UserID: "owner"}
+	got, err := provider.Feed(context.Background(), "owner")
+	if err != nil {
+		t.Fatalf("Feed: %v", err)
+	}
+	if got.ID != "b1" || composer.calls != 1 {
+		t.Fatalf("batch = %+v, compose calls = %d", got, composer.calls)
+	}
+}
+
+func TestLiveFeedProviderErrors(t *testing.T) {
+	provider := LiveFeedProvider{Store: stubFeedStore{err: errors.New("db")}, Composer: &stubComposer{}}
+	if _, err := provider.Feed(context.Background(), "owner"); err == nil {
+		t.Fatal("Feed(store error) = nil, want an error")
+	}
+	provider = LiveFeedProvider{Store: stubFeedStore{err: feed.ErrNoCachedFeed}}
+	if _, err := provider.Feed(context.Background(), "owner"); !errors.Is(err, feed.ErrNoCachedFeed) {
+		t.Fatalf("Feed(nil composer) = %v, want ErrNoCachedFeed", err)
+	}
+	provider = LiveFeedProvider{Store: stubFeedStore{err: feed.ErrNoCachedFeed}, Composer: &stubComposer{err: feed.ErrNotAuthenticated}}
+	if _, err := provider.Feed(context.Background(), "owner"); !errors.Is(err, feed.ErrNotAuthenticated) {
+		t.Fatalf("Feed(compose error) = %v, want ErrNotAuthenticated", err)
+	}
+}
+
+func TestFeedErrorMapping(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "auth", err: feed.ErrNotAuthenticated, want: http.StatusUnauthorized},
+		{name: "interests", err: feed.ErrNoInterests, want: http.StatusConflict},
+		{name: "profile", err: feed.ErrNoProfile, want: http.StatusConflict},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			FeedHandler(stubFeedProvider{err: tt.err}).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/v1/feed", nil))
+			if recorder.Code != tt.want {
+				t.Fatalf("status = %d, want %d", recorder.Code, tt.want)
+			}
+		})
+	}
+}

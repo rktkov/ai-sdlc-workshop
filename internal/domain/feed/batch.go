@@ -16,6 +16,12 @@ var (
 	ErrNoCachedFeed = errors.New("no cached feed")
 	// ErrBatchNotFound means the batch does not exist.
 	ErrBatchNotFound = errors.New("batch not found")
+	// ErrNotAuthenticated means no usable Google token exists.
+	ErrNotAuthenticated = errors.New("not authenticated")
+	// ErrNoInterests means the profile and subscriptions cannot seed a query.
+	ErrNoInterests = errors.New("interests not set")
+	// ErrNoProfile means the taste profile is missing.
+	ErrNoProfile = errors.New("taste profile not set")
 )
 
 // BatchState is the lifecycle state of one batch.

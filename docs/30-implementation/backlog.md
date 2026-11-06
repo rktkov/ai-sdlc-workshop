@@ -148,6 +148,16 @@ needs explicit confirmation:
 The proposal was approved on 2026-11-04 when the owner started `T-001`. The architecture
 backlog is kept as history until the owner confirms the fold and deletion (`DOC-19`).
 
+## Post-E6 assembly
+
+| Date | Item | Result |
+| 2026-11-05 | Live consent | Closed. `ytfeed auth status` reports an active `youtube.readonly` token. |
+| 2026-11-06 | Live composition | Closed. `serve` serves the cached batch or composes and saves one through `liveComposer`. |
+| Open | Stats and rating UI | `ytfeed stats` and the weekly prompt are not wired. |
+| Open | Trace call sites | Spans are written but not called by the pipeline or transport. |
+| Open | Real model run | The analyzer is still tested against a fake OpenAI-compatible endpoint. |
+| Open | `OQ-22` | The provisional `spike-s01` profile remains. |
+
 ## Progress
 
 | Date | Task | Result |

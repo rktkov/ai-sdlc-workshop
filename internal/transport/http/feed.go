@@ -21,6 +21,35 @@ type FeedStore interface {
 	LatestCompleted(ctx context.Context, userID string) (feed.Batch, error)
 }
 
+// FeedComposer builds and saves one batch.
+type FeedComposer interface {
+	Compose(ctx context.Context, userID string) (feed.Batch, error)
+}
+
+// LiveFeedProvider serves the cache or composes a new batch.
+type LiveFeedProvider struct {
+	Store    FeedStore
+	Composer FeedComposer
+	UserID   string
+}
+
+// Feed returns the cached batch or composes one.
+func (p LiveFeedProvider) Feed(ctx context.Context, _ string) (feed.Batch, error) {
+	if p.Store != nil {
+		batch, err := p.Store.LatestCompleted(ctx, p.UserID)
+		if err == nil {
+			return batch, nil
+		}
+		if !errors.Is(err, feed.ErrNoCachedFeed) {
+			return feed.Batch{}, err
+		}
+	}
+	if p.Composer == nil {
+		return feed.Batch{}, feed.ErrNoCachedFeed
+	}
+	return p.Composer.Compose(ctx, p.UserID)
+}
+
 // CachedFeedProvider serves the latest completed batch.
 type CachedFeedProvider struct {
 	Store  FeedStore
@@ -48,13 +77,20 @@ func FeedHandler(provider FeedProvider) http.HandlerFunc {
 			return
 		}
 		batch, err := provider.Feed(r.Context(), "owner")
-		if errors.Is(err, feed.ErrNoCachedFeed) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte(`{"error":"no_feed"}`))
+		switch {
+		case errors.Is(err, feed.ErrNoCachedFeed):
+			writeFeedError(w, http.StatusNotFound, "no_feed")
 			return
-		}
-		if err != nil {
+		case errors.Is(err, feed.ErrNotAuthenticated):
+			writeFeedError(w, http.StatusUnauthorized, "not_authenticated")
+			return
+		case errors.Is(err, feed.ErrNoInterests):
+			writeFeedError(w, http.StatusConflict, "interests_not_set")
+			return
+		case errors.Is(err, feed.ErrNoProfile):
+			writeFeedError(w, http.StatusConflict, "profile_not_set")
+			return
+		case err != nil:
 			http.Error(w, "feed unavailable", http.StatusInternalServerError)
 			return
 		}
@@ -73,6 +109,12 @@ func FeedHandler(provider FeedProvider) http.HandlerFunc {
 		}
 		streamFeed(w, payload)
 	}
+}
+
+func writeFeedError(w http.ResponseWriter, status int, code string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(`{"error":"` + code + `"}`))
 }
 
 func streamFeed(w http.ResponseWriter, payload contract.Feed) {

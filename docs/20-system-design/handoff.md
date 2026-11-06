@@ -71,7 +71,7 @@ Done 39 | In review 0 | In progress 0 | Blocked 0 | Remaining 0
   are confirmed.
 - **Assembly is complete.** `ARCH-501`…`ARCH-505` are `DONE`. The final gate passed.
 - **Handoff is complete.** `ARCH-601` is `DONE`. The implementation backlog is active.
-  Next: live verification. The implementation backlog is complete. OAuth consent, live YouTube/yt-dlp/model calls, feed composition wiring, stats/rating UI and trace call sites remain. `OQ-22` records the provisional profile.
+  Next: post-E6 assembly. Live consent and live feed composition are closed. Stats/rating UI, trace call sites, a real model run and `OQ-22` remain. The full implementation backlog is complete.
 
 **Documentation language.** All documents use ASD-STE100 (`DOC-20`). The pre-STE originals
 are archived at [`_archive/pre-ste-2026-11-03/`](../_archive/pre-ste-2026-11-03/). The

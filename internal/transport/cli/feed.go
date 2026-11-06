@@ -18,19 +18,10 @@ import (
 )
 
 func runFeed(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer, baseURL string) int {
-	flags := flag.NewFlagSet("feed", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	jsonOut := flags.Bool("json", false, "print one JSON object")
-	_ = flags.Bool("quiet", false, "hide the footer")
-	_ = flags.Bool("no-color", false, "disable color")
-	if err := flags.Parse(args); err != nil {
-		return 2
+	jsonOut, code := parseFeedFlags(args, stderr)
+	if code != 0 {
+		return code
 	}
-	if flags.NArg() > 0 {
-		_, _ = fmt.Fprintf(stderr, "ytfeed feed: unexpected argument %q\n", flags.Arg(0))
-		return 2
-	}
-
 	cfg, err := config.Load(getenv)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
@@ -44,44 +35,81 @@ func runFeed(ctx context.Context, args []string, getenv func(string) string, std
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
-
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1/feed", nil)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
 		return 1
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
-	if *jsonOut {
+	if jsonOut {
 		request.Header.Set("Accept", "application/json")
 	} else {
 		request.Header.Set("Accept", "text/event-stream")
 	}
 
-	client := &http.Client{Timeout: 0}
-	resp, err := client.Do(request)
+	resp, err := (&http.Client{Timeout: 0}).Do(request)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "ytfeed feed: server unavailable: %v\n", err)
 		return 1
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if code := feedHTTPError(resp, stderr); code >= 0 {
+		return code
+	}
+	if jsonOut || strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
+		return renderFeedJSON(resp.Body, stdout, stderr)
+	}
+	return renderFeedSSE(resp.Body, stdout, stderr)
+}
 
-	if resp.StatusCode == http.StatusUnauthorized {
-		_, _ = fmt.Fprintln(stderr, "ytfeed feed: unauthorized; check the API token")
+func parseFeedFlags(args []string, stderr io.Writer) (bool, int) {
+	flags := flag.NewFlagSet("feed", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	jsonOut := flags.Bool("json", false, "print one JSON object")
+	_ = flags.Bool("quiet", false, "hide the footer")
+	_ = flags.Bool("no-color", false, "disable color")
+	if err := flags.Parse(args); err != nil {
+		return false, 2
+	}
+	if flags.NArg() > 0 {
+		_, _ = fmt.Fprintf(stderr, "ytfeed feed: unexpected argument %q\n", flags.Arg(0))
+		return false, 2
+	}
+	return *jsonOut, 0
+}
+
+func feedHTTPError(resp *http.Response, stderr io.Writer) int {
+	if resp.StatusCode == http.StatusOK {
+		return -1
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusConflict {
+		var problem struct {
+			Error string `json:"error"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&problem)
+		switch problem.Error {
+		case "not_authenticated":
+			_, _ = fmt.Fprintln(stderr, "ytfeed feed: not authenticated; run `ytfeed onboard`")
+		case "interests_not_set":
+			_, _ = fmt.Fprintln(stderr, "ytfeed feed: interests not set; run `ytfeed onboard`")
+		case "profile_not_set":
+			_, _ = fmt.Fprintln(stderr, "ytfeed feed: taste profile not set; run `ytfeed onboard`")
+		default:
+			if resp.StatusCode == http.StatusUnauthorized {
+				_, _ = fmt.Fprintln(stderr, "ytfeed feed: unauthorized; check the API token")
+			} else {
+				_, _ = fmt.Fprintf(stderr, "ytfeed feed: server returned %d\n", resp.StatusCode)
+				return 1
+			}
+		}
 		return 2
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		_, _ = fmt.Fprintln(stderr, "ytfeed feed: no feed available")
 		return 6
 	}
-	if resp.StatusCode != http.StatusOK {
-		_, _ = fmt.Fprintf(stderr, "ytfeed feed: server returned %d\n", resp.StatusCode)
-		return 1
-	}
-
-	if *jsonOut || strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
-		return renderFeedJSON(resp.Body, stdout, stderr)
-	}
-	return renderFeedSSE(resp.Body, stdout, stderr)
+	_, _ = fmt.Fprintf(stderr, "ytfeed feed: server returned %d\n", resp.StatusCode)
+	return 1
 }
 
 func renderFeedJSON(body io.Reader, stdout, stderr io.Writer) int {
