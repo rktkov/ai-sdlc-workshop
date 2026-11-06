@@ -296,7 +296,11 @@ func TestInteractiveRefresh(t *testing.T) {
 		case "/v1/feed":
 			if r.Header.Get("X-Ytfeed-Refresh") == "true" {
 				refreshed = true
-				_, _ = fmt.Fprint(w, `{"batch_id":"b2","state":"completed","cards":[{"card_id":"c9","video_id":"v9","channel_id":"ch9","title":"Refreshed card","channel":"Channel","state":"failed","reason":"no_transcript","position":0}]}`)
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = fmt.Fprint(w, "event: progress\ndata: {\"stage\":\"search\",\"message\":\"searching: ai agents\"}\n\n")
+				_, _ = fmt.Fprint(w, "event: batch.started\ndata: {\"batch_id\":\"b2\",\"state\":\"completed\",\"size\":1}\n\n")
+				_, _ = fmt.Fprint(w, "event: card.upsert\ndata: {\"card_id\":\"c9\",\"video_id\":\"v9\",\"channel_id\":\"ch9\",\"title\":\"Refreshed card\",\"channel\":\"Channel\",\"state\":\"failed\",\"reason\":\"no_transcript\",\"position\":0}\n\n")
+				_, _ = fmt.Fprint(w, "event: batch.done\ndata: {\"batch_id\":\"b2\",\"state\":\"completed\"}\n\n")
 				return
 			}
 			_ = json.NewEncoder(w).Encode(interactiveFeed())
@@ -316,6 +320,9 @@ func TestInteractiveRefresh(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Refreshed card") {
 		t.Fatalf("stdout = %q", out.String())
+	}
+	if !strings.Contains(errOut.String(), "searching: ai agents") {
+		t.Fatalf("stderr = %q", errOut.String())
 	}
 }
 
@@ -341,5 +348,37 @@ func TestInteractiveRefreshError(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "refresh failed") {
 		t.Fatalf("stderr = %q", errOut.String())
+	}
+}
+
+func TestInteractiveRefreshStreamErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/feed":
+			if r.Header.Get("X-Ytfeed-Refresh") == "true" {
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = fmt.Fprint(w, "event: error\ndata: {\"error\":\"not_authenticated\"}\n\n")
+				return
+			}
+			_ = json.NewEncoder(w).Encode(interactiveFeed())
+		case "/v1/rating":
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	var out, errOut bytes.Buffer
+	if code := RunWithInput(context.Background(), []string{"feed", "--interactive"}, feedTestEnv(t), strings.NewReader("r\nq\n"), &out, &errOut, server.URL); code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if !strings.Contains(errOut.String(), "refresh failed") || !strings.Contains(errOut.String(), "not authenticated") {
+		t.Fatalf("stderr = %q", errOut.String())
+	}
+}
+
+func TestFetchInteractiveFeedBadURL(t *testing.T) {
+	if _, err := fetchInteractiveFeed(context.Background(), "token", "://bad", io.Discard); err == nil {
+		t.Fatal("fetchInteractiveFeed = nil, want an error")
 	}
 }

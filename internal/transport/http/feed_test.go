@@ -286,3 +286,32 @@ func TestLiveFeedProviderRefresh(t *testing.T) {
 		t.Fatalf("compose calls = %d, want 1", composer.calls)
 	}
 }
+
+type progressFeedProvider struct {
+	batch feed.Batch
+}
+
+func (p progressFeedProvider) Feed(context.Context, string) (feed.Batch, error) {
+	return p.batch, nil
+}
+func (p progressFeedProvider) FeedWithProgress(_ context.Context, _ string, progress feed.ProgressFunc) (feed.Batch, error) {
+	progress("search", "searching: ai agents", map[string]any{"current": 1, "total": 5})
+	return p.batch, nil
+}
+
+func TestFeedProgressStream(t *testing.T) {
+	handler := FeedHandler(progressFeedProvider{batch: feedBatch()})
+	request := httptest.NewRequest(http.MethodGet, "/v1/feed", nil)
+	request.Header.Set("Accept", "text/event-stream")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{"event: progress", "searching: ai agents", "event: batch.started", "event: card.upsert", "event: batch.done"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q:\n%s", want, body)
+		}
+	}
+}

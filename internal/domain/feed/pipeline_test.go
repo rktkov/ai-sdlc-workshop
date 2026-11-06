@@ -613,3 +613,26 @@ func TestPipelineWritesSpans(t *testing.T) {
 		}
 	}
 }
+
+func TestPipelineProgress(t *testing.T) {
+	var stages []string
+	pipeline := testPipeline(nil)
+	pipeline.Size = 1
+	pipeline.Progress = func(stage, _ string, _ map[string]any) { stages = append(stages, stage) }
+	if _, err := pipeline.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	want := []string{"plan", "search", "search_done", "videos", "channels", "select", "fetch", "fetch_done", "stage", "analyze", "analyzed", "save"}
+	for _, stage := range want {
+		found := false
+		for _, got := range stages {
+			if got == stage {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing stage %q in %v", stage, stages)
+		}
+	}
+}

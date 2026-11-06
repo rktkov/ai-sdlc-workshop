@@ -39,6 +39,16 @@ type FeedComposer interface {
 	Compose(ctx context.Context, userID string) (feed.Batch, error)
 }
 
+// ProgressComposer builds a batch and reports each step.
+type ProgressComposer interface {
+	ComposeWithProgress(ctx context.Context, userID string, progress feed.ProgressFunc) (feed.Batch, error)
+}
+
+// FeedProgressProvider serves a batch and reports composition progress.
+type FeedProgressProvider interface {
+	FeedWithProgress(ctx context.Context, userID string, progress feed.ProgressFunc) (feed.Batch, error)
+}
+
 // LiveFeedProvider serves the cache or composes a new batch.
 type LiveFeedProvider struct {
 	Store    FeedStore
@@ -48,9 +58,17 @@ type LiveFeedProvider struct {
 
 // Feed returns the cached batch or composes one.
 func (p LiveFeedProvider) Feed(ctx context.Context, _ string) (feed.Batch, error) {
+	return p.FeedWithProgress(ctx, "", nil)
+}
+
+// FeedWithProgress returns the cache or composes with progress events.
+func (p LiveFeedProvider) FeedWithProgress(ctx context.Context, _ string, progress feed.ProgressFunc) (feed.Batch, error) {
 	if p.Store != nil && !RefreshRequested(ctx) {
 		batch, err := p.Store.LatestCompleted(ctx, p.UserID)
 		if err == nil {
+			if progress != nil {
+				progress("cache", "using the cached batch", nil)
+			}
 			return batch, nil
 		}
 		if !errors.Is(err, feed.ErrNoCachedFeed) {
@@ -59,6 +77,9 @@ func (p LiveFeedProvider) Feed(ctx context.Context, _ string) (feed.Batch, error
 	}
 	if p.Composer == nil {
 		return feed.Batch{}, feed.ErrNoCachedFeed
+	}
+	if composer, ok := p.Composer.(ProgressComposer); ok {
+		return composer.ComposeWithProgress(ctx, p.UserID, progress)
 	}
 	return p.Composer.Compose(ctx, p.UserID)
 }
@@ -93,38 +114,37 @@ func FeedHandler(provider FeedProvider) http.HandlerFunc {
 		if r.Header.Get("X-Ytfeed-Refresh") == "true" {
 			ctx = WithRefresh(ctx)
 		}
-		batch, err := provider.Feed(ctx, "owner")
-		switch {
-		case errors.Is(err, feed.ErrNoCachedFeed):
-			writeFeedError(w, http.StatusNotFound, "no_feed")
-			return
-		case errors.Is(err, feed.ErrNotAuthenticated):
-			writeFeedError(w, http.StatusUnauthorized, "not_authenticated")
-			return
-		case errors.Is(err, feed.ErrNoInterests):
-			writeFeedError(w, http.StatusConflict, "interests_not_set")
-			return
-		case errors.Is(err, feed.ErrNoProfile):
-			writeFeedError(w, http.StatusConflict, "profile_not_set")
-			return
-		case err != nil:
-			http.Error(w, "feed unavailable", http.StatusInternalServerError)
-			return
-		}
-		payload := contract.FeedFromBatch(batch)
-		if err := payload.Validate(); err != nil {
-			http.Error(w, "invalid feed", http.StatusInternalServerError)
-			return
-		}
-
-		if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		if !strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+			batch, err := provider.Feed(ctx, "owner")
+			switch {
+			case errors.Is(err, feed.ErrNoCachedFeed):
+				writeFeedError(w, http.StatusNotFound, "no_feed")
+				return
+			case errors.Is(err, feed.ErrNotAuthenticated):
+				writeFeedError(w, http.StatusUnauthorized, "not_authenticated")
+				return
+			case errors.Is(err, feed.ErrNoInterests):
+				writeFeedError(w, http.StatusConflict, "interests_not_set")
+				return
+			case errors.Is(err, feed.ErrNoProfile):
+				writeFeedError(w, http.StatusConflict, "profile_not_set")
+				return
+			case err != nil:
+				http.Error(w, "feed unavailable", http.StatusInternalServerError)
+				return
+			}
+			payload := contract.FeedFromBatch(batch)
+			if err := payload.Validate(); err != nil {
+				http.Error(w, "invalid feed", http.StatusInternalServerError)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(payload); err != nil {
 				http.Error(w, "encode feed", http.StatusInternalServerError)
 			}
 			return
 		}
-		streamFeed(w, payload)
+		streamFeed(w, provider, ctx)
 	}
 }
 
@@ -134,7 +154,7 @@ func writeFeedError(w http.ResponseWriter, status int, code string) {
 	_, _ = w.Write([]byte(`{"error":"` + code + `"}`))
 }
 
-func streamFeed(w http.ResponseWriter, payload contract.Feed) {
+func streamFeed(w http.ResponseWriter, provider FeedProvider, ctx context.Context) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -145,6 +165,45 @@ func streamFeed(w http.ResponseWriter, payload contract.Feed) {
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
+	var batch feed.Batch
+	var err error
+	if progressProvider, ok := provider.(FeedProgressProvider); ok {
+		batch, err = progressProvider.FeedWithProgress(ctx, "owner", func(stage, message string, attributes map[string]any) {
+			writeEvent(w, flusher, "progress", map[string]any{
+				"stage": stage, "message": message, "attributes": attributes,
+			})
+		})
+	} else {
+		batch, err = provider.Feed(ctx, "owner")
+	}
+	if err != nil {
+		writeEvent(w, flusher, "error", map[string]any{"error": feedErrorCode(err)})
+		return
+	}
+	payload := contract.FeedFromBatch(batch)
+	if err := payload.Validate(); err != nil {
+		writeEvent(w, flusher, "error", map[string]any{"error": "invalid_feed"})
+		return
+	}
+	writeFeedEvents(w, flusher, payload)
+}
+
+func feedErrorCode(err error) string {
+	switch {
+	case errors.Is(err, feed.ErrNotAuthenticated):
+		return "not_authenticated"
+	case errors.Is(err, feed.ErrNoInterests):
+		return "interests_not_set"
+	case errors.Is(err, feed.ErrNoProfile):
+		return "profile_not_set"
+	case errors.Is(err, feed.ErrNoCachedFeed):
+		return "no_feed"
+	default:
+		return "feed_unavailable"
+	}
+}
+
+func writeFeedEvents(w http.ResponseWriter, flusher http.Flusher, payload contract.Feed) {
 	writeEvent(w, flusher, "batch.started", map[string]any{
 		"batch_id": payload.BatchID, "state": payload.State, "size": len(payload.Cards),
 		"banner": payload.Banner, "degradation_reason": payload.DegradationReason,

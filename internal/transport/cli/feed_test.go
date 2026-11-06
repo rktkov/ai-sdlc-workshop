@@ -201,3 +201,61 @@ func TestFeedRefreshHeader(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut.String())
 	}
 }
+
+func TestFeedSSEProgress(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/rating" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "event: progress\ndata: {\"stage\":\"search\",\"message\":\"searching: ai agents\"}\n\n")
+		_, _ = fmt.Fprint(w, "event: batch.started\ndata: {\"batch_id\":\"b1\",\"state\":\"completed\",\"size\":1}\n\n")
+		data, _ := json.Marshal(wireCard())
+		_, _ = fmt.Fprintf(w, "event: card.upsert\ndata: %s\n\n", data)
+		_, _ = fmt.Fprint(w, "event: batch.done\ndata: {\"batch_id\":\"b1\",\"state\":\"completed\"}\n\n")
+	}))
+	defer server.Close()
+
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"feed"}, feedTestEnv(t), &out, &errOut, server.URL); code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "searching: ai agents") {
+		t.Fatalf("stderr = %q", errOut.String())
+	}
+}
+
+func TestFeedErrorEvent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/rating" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "event: error\ndata: {\"error\":\"not_authenticated\"}\n\n")
+	}))
+	defer server.Close()
+
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"feed"}, feedTestEnv(t), &out, &errOut, server.URL); code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	if !strings.Contains(errOut.String(), "not authenticated") {
+		t.Fatalf("stderr = %q", errOut.String())
+	}
+}
+
+func TestFeedErrorText(t *testing.T) {
+	for code, want := range map[string]string{
+		"not_authenticated": "not authenticated",
+		"interests_not_set": "interests not set",
+		"profile_not_set":   "taste profile not set",
+		"no_feed":           "no feed available",
+		"other":             "feed unavailable",
+	} {
+		if got := feedErrorText(code); !strings.Contains(got, want) {
+			t.Fatalf("feedErrorText(%q) = %q", code, got)
+		}
+	}
+}

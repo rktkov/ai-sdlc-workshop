@@ -47,6 +47,14 @@ processes:
 The suite does not cover a live Google consent, a live YouTube call, a live `yt-dlp`
 download or a live model call. Those need the owner at the browser and local binaries.
 
+## Post-E6 additions
+
+- **Interactive feed.** TTY card mode with accept, reject, save, navigation, open, refresh
+  and quit. `--interactive` forces line mode; `--json` stays one-shot.
+- **Step-by-step refresh.** The server streams SSE `progress` events during composition.
+  The CLI prints token, interests, profile, planning, search, metadata, selection,
+  transcript, analysis and save steps before the new cards appear.
+
 ## Open items
 
 1. **Live consent — closed 2026-11-05.** `ytfeed auth status` reported `status=active`

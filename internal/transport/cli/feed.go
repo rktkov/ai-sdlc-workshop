@@ -183,6 +183,25 @@ func renderFeedSSE(body io.Reader, stdout, stderr io.Writer) int {
 				if start.Banner != "" {
 					_, _ = fmt.Fprintf(stdout, "banner: %s\n", start.Banner)
 				}
+			case "progress":
+				var progress struct {
+					Stage   string `json:"stage"`
+					Message string `json:"message"`
+				}
+				if err := json.Unmarshal(data, &progress); err != nil {
+					_, _ = fmt.Fprintf(stderr, "ytfeed feed: decode progress: %v\n", err)
+					return 1
+				}
+				if progress.Message != "" {
+					_, _ = fmt.Fprintf(stderr, "· %s\n", progress.Message)
+				}
+			case "error":
+				var problem struct {
+					Error string `json:"error"`
+				}
+				_ = json.Unmarshal(data, &problem)
+				_, _ = fmt.Fprintf(stderr, "ytfeed feed: %s\n", feedErrorText(problem.Error))
+				return 1
 			case "card.upsert":
 				var wire contract.FeedCard
 				if err := json.Unmarshal(data, &wire); err != nil {
@@ -207,6 +226,21 @@ func renderFeedSSE(body io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+func feedErrorText(code string) string {
+	switch code {
+	case "not_authenticated":
+		return "not authenticated; run `ytfeed onboard`"
+	case "interests_not_set":
+		return "interests not set; run `ytfeed onboard`"
+	case "profile_not_set":
+		return "taste profile not set; run `ytfeed onboard`"
+	case "no_feed":
+		return "no feed available"
+	default:
+		return "feed unavailable"
+	}
 }
 
 func cardFromWire(wire contract.FeedCard) (feed.Card, error) {

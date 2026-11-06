@@ -71,7 +71,7 @@ Done 39 | In review 0 | In progress 0 | Blocked 0 | Remaining 0
   are confirmed.
 - **Assembly is complete.** `ARCH-501`…`ARCH-505` are `DONE`. The final gate passed.
 - **Handoff is complete.** `ARCH-601` is `DONE`. The implementation backlog is active.
-  Next: post-E6 assembly. Live consent, live feed composition and the stats/rating UI are closed and verified live. All post-E6 verification items are closed, including `OQ-22`. The interactive feed is available. The implementation and verification backlog is complete. The full implementation backlog is complete.
+  Next: post-E6 assembly. Live consent, live feed composition and the stats/rating UI are closed and verified live. All post-E6 verification items are closed, including `OQ-22`. The interactive feed and step-by-step refresh progress are available. The implementation and verification backlog is complete. The full implementation backlog is complete.
 
 **Documentation language.** All documents use ASD-STE100 (`DOC-20`). The pre-STE originals
 are archived at [`_archive/pre-ste-2026-11-03/`](../_archive/pre-ste-2026-11-03/). The

@@ -35,6 +35,9 @@ type Analyzer interface {
 	Analyze(ctx context.Context, transcript string) (analysis.Analysis, error)
 }
 
+// ProgressFunc reports one composition step.
+type ProgressFunc func(stage, message string, attributes map[string]any)
+
 // Pipeline runs discovery, selection and analysis in order.
 type Pipeline struct {
 	UserID        string
@@ -56,9 +59,10 @@ type Pipeline struct {
 	Analyzer    Analyzer
 	Analyses    Analyses
 
-	Now    func() time.Time
-	NewID  func(videoID, rubricVersion string) string
-	Tracer *trace.Logger
+	Now      func() time.Time
+	NewID    func(videoID, rubricVersion string) string
+	Tracer   *trace.Logger
+	Progress ProgressFunc
 }
 
 // Result is one completed batch pipeline run.
@@ -78,6 +82,7 @@ func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
 	if err := p.validate(); err != nil {
 		return Result{}, err
 	}
+	p.report("plan", fmt.Sprintf("planning %d queries", len(p.Interests)), nil)
 	queries, err := p.Planner.Plan(p.Interests)
 	if err != nil {
 		return Result{}, fmt.Errorf("plan queries: %w", err)
@@ -102,6 +107,7 @@ func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
 			DiscoveryRank:   position,
 		})
 	}
+	p.report("select", fmt.Sprintf("selecting up to %d cards from %d candidates", p.Size, len(candidates)), nil)
 	selection, err := discovery.Select(candidates, p.Exclusions, p.Size, p.MicroTarget)
 	if err != nil {
 		return Result{}, err
@@ -145,7 +151,8 @@ func (p *Pipeline) validate() error {
 
 func (p *Pipeline) discover(ctx context.Context, queries []discovery.Query) ([]discovery.Video, string, error) {
 	var videos []discovery.Video
-	for _, query := range queries {
+	for index, query := range queries {
+		p.report("search", "searching: "+query.Text, map[string]any{"current": index + 1, "total": len(queries)})
 		reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallSearch)
 		if errors.Is(err, discovery.ErrQuotaExhausted) {
 			return videos, "quota", nil
@@ -164,6 +171,7 @@ func (p *Pipeline) discover(ctx context.Context, queries []discovery.Query) ([]d
 		if err := p.charge(ctx, reservation.ID); err != nil {
 			return nil, "", err
 		}
+		p.report("search_done", fmt.Sprintf("found %d results for %s", len(found), query.Text), map[string]any{"current": index + 1, "total": len(queries)})
 		videos = append(videos, found...)
 	}
 	if len(videos) == 0 {
@@ -220,6 +228,7 @@ func (p *Pipeline) enrich(ctx context.Context, videos []discovery.Video) ([]disc
 }
 
 func (p *Pipeline) videos(ctx context.Context, ids []string) ([]discovery.Video, string, error) {
+	p.report("videos", fmt.Sprintf("loading metadata for %d videos", len(ids)), nil)
 	reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallVideos)
 	if errors.Is(err, discovery.ErrQuotaExhausted) {
 		return nil, "quota", nil
@@ -239,6 +248,7 @@ func (p *Pipeline) videos(ctx context.Context, ids []string) ([]discovery.Video,
 }
 
 func (p *Pipeline) channels(ctx context.Context, ids []string) (map[string]identity.Subscription, string, error) {
+	p.report("channels", fmt.Sprintf("loading metadata for %d channels", len(ids)), nil)
 	reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallChannels)
 	if errors.Is(err, discovery.ErrQuotaExhausted) {
 		return nil, "quota", nil
@@ -287,23 +297,33 @@ func (p *Pipeline) analyze(ctx context.Context, selected []discovery.SelectedCan
 }
 
 func (p *Pipeline) analyzeOne(ctx context.Context, candidate discovery.SelectedCandidate) (analysis.Analysis, error) {
+	p.report("fetch", "fetching transcript: "+candidate.VideoID, nil)
 	transcript, err := p.Fetcher.Fetch(ctx, candidate.VideoID)
 	if err != nil {
+		p.report("no_transcript", "no transcript: "+candidate.VideoID, nil)
 		return p.saveFailed(ctx, candidate, analysis.ReasonNoTranscript)
 	}
+	p.report("fetch_done", "transcript ready: "+candidate.VideoID, nil)
 
 	var staged analysis.Staged
 	hasStage := false
 	if p.Staging {
+		p.report("stage", "staging transcript: "+candidate.VideoID, nil)
 		staged, err = p.Transcripts.Put(ctx, candidate.VideoID, transcript)
 		if err == nil {
 			hasStage = true
 		}
 	}
 
+	p.report("analyze", "analyzing: "+candidate.VideoID, nil)
 	value, err := p.Analyzer.Analyze(ctx, transcript)
 	if err != nil {
 		value = analysis.Analysis{State: analysis.StateFailed, Reason: analysis.ReasonInvalidModelOutput}
+	}
+	if value.State == analysis.StateAnalyzed {
+		p.report("analyzed", "analyzed: "+value.Topic, map[string]any{"video_id": candidate.VideoID})
+	} else {
+		p.report("analysis_failed", "analysis failed: "+string(value.Reason), map[string]any{"video_id": candidate.VideoID})
 	}
 	value.UserID = p.UserID
 	value.VideoID = candidate.VideoID
@@ -324,6 +344,7 @@ func (p *Pipeline) analyzeOne(ctx context.Context, candidate discovery.SelectedC
 	if value.CreatedAt.IsZero() {
 		value.CreatedAt = value.CompletedAt
 	}
+	p.report("save", "saving card: "+candidate.VideoID, nil)
 	if err := p.Analyses.Save(ctx, value); err != nil {
 		if errors.Is(err, analysis.ErrAnalysisExists) {
 			existing, findErr := p.Analyses.FindByKey(ctx, p.UserID, candidate.VideoID, p.RubricVersion)
@@ -355,10 +376,17 @@ func (p *Pipeline) saveFailed(ctx context.Context, candidate discovery.SelectedC
 		CreatedAt:      p.now(),
 		CompletedAt:    p.now(),
 	}
+	p.report("save", "saving card: "+candidate.VideoID, nil)
 	if err := p.Analyses.Save(ctx, value); err != nil {
 		return analysis.Analysis{}, fmt.Errorf("save failed analysis: %w", err)
 	}
 	return value, nil
+}
+
+func (p *Pipeline) report(stage, message string, attributes map[string]any) {
+	if p.Progress != nil {
+		p.Progress(stage, message, attributes)
+	}
 }
 
 func (p *Pipeline) startSpan(ctx context.Context, name string, attributes map[string]any) *trace.Span {

@@ -72,7 +72,7 @@ func renderFeedInteractive(ctx context.Context, token, baseURL string, body io.R
 
 func refreshInteractiveFeed(ctx context.Context, token, baseURL string, stdout, stderr io.Writer, current contract.Feed) (contract.Feed, int) {
 	_, _ = fmt.Fprintln(stdout, "composing a new batch...")
-	value, err := fetchInteractiveFeed(ctx, token, baseURL)
+	value, err := fetchInteractiveFeed(ctx, token, baseURL, stderr)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "ytfeed feed: refresh failed: %v\n", err)
 		return current, 0
@@ -80,7 +80,7 @@ func refreshInteractiveFeed(ctx context.Context, token, baseURL string, stdout, 
 	return value, 0
 }
 
-func fetchInteractiveFeed(ctx context.Context, token, baseURL string) (contract.Feed, error) {
+func fetchInteractiveFeed(ctx context.Context, token, baseURL string, stderr io.Writer) (contract.Feed, error) {
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
@@ -89,7 +89,7 @@ func fetchInteractiveFeed(ctx context.Context, token, baseURL string) (contract.
 		return contract.Feed{}, err
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Accept", "text/event-stream")
 	request.Header.Set("X-Ytfeed-Refresh", "true")
 	resp, err := (&http.Client{Timeout: 0}).Do(request)
 	if err != nil {
@@ -99,14 +99,68 @@ func fetchInteractiveFeed(ctx context.Context, token, baseURL string) (contract.
 	if resp.StatusCode != http.StatusOK {
 		return contract.Feed{}, fmt.Errorf("server returned %d", resp.StatusCode)
 	}
+
 	var payload contract.Feed
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	scanner := bufio.NewScanner(resp.Body)
+	event := ""
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case strings.HasPrefix(line, "event: "):
+			event = strings.TrimPrefix(line, "event: ")
+		case strings.HasPrefix(line, "data: "):
+			done, err := applyInteractiveEvent(event, []byte(strings.TrimPrefix(line, "data: ")), &payload, stderr)
+			if err != nil {
+				return contract.Feed{}, err
+			}
+			if done {
+				return payload, nil
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
 		return contract.Feed{}, err
 	}
-	if err := payload.Validate(); err != nil {
-		return contract.Feed{}, err
+	return contract.Feed{}, fmt.Errorf("stream ended before batch.done")
+}
+
+func applyInteractiveEvent(event string, data []byte, payload *contract.Feed, stderr io.Writer) (bool, error) {
+	switch event {
+	case "progress":
+		var progress struct {
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(data, &progress); err == nil && progress.Message != "" {
+			_, _ = fmt.Fprintf(stderr, "· %s\n", progress.Message)
+		}
+	case "batch.started":
+		var start struct {
+			BatchID string `json:"batch_id"`
+			State   string `json:"state"`
+		}
+		if err := json.Unmarshal(data, &start); err == nil {
+			payload.BatchID = start.BatchID
+			payload.State = start.State
+		}
+	case "card.upsert":
+		var card contract.FeedCard
+		if err := json.Unmarshal(data, &card); err != nil {
+			return false, err
+		}
+		payload.Cards = append(payload.Cards, card)
+	case "error":
+		var problem struct {
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(data, &problem)
+		return false, fmt.Errorf("%s", feedErrorText(problem.Error))
+	case "batch.done":
+		if err := payload.Validate(); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
-	return payload, nil
+	return false, nil
 }
 
 func handleInteractiveKey(ctx context.Context, token, baseURL string, cards *[]contract.FeedCard, index int, key string, reader *bufio.Reader, raw bool, stdout, stderr io.Writer, picker *ReasonPicker) (int, bool) {

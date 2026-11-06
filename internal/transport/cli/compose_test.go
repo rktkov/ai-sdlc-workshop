@@ -95,7 +95,7 @@ func liveComposerFixture() (*liveComposer, *fakeBatchSaver, *[]string) {
 		Channels:   fakeChannelLister{},
 		Exclusions: fakeExclusionReader{set: discovery.ExclusionSet{Watched: map[string]bool{"old": true}}},
 		Store:      store,
-		Factory: func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet) pipelineRunner {
+		Factory: func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, _ feed.ProgressFunc) pipelineRunner {
 			seen = append(seen, interests...)
 			if len(exclusions.Watched) != 1 {
 				seen = append(seen, "missing-exclusions")
@@ -161,7 +161,7 @@ func TestLiveComposerNoProfile(t *testing.T) {
 
 func TestLiveComposerQuotaShortfall(t *testing.T) {
 	composer, store, _ := liveComposerFixture()
-	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet) pipelineRunner {
+	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet, feed.ProgressFunc) pipelineRunner {
 		return fakeRunner{result: feed.Result{Shortfall: "quota"}}
 	}
 	batch, err := composer.Compose(context.Background(), "owner")
@@ -183,7 +183,7 @@ func TestLiveComposerErrors(t *testing.T) {
 		t.Fatal("Compose(exclusion error) = nil, want an error")
 	}
 	composer, _, _ = liveComposerFixture()
-	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet) pipelineRunner {
+	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet, feed.ProgressFunc) pipelineRunner {
 		return fakeRunner{err: errors.New("pipeline")}
 	}
 	if _, err := composer.Compose(context.Background(), "owner"); err == nil {
@@ -196,5 +196,26 @@ func TestLiveComposerErrors(t *testing.T) {
 	}
 	if _, err := (&liveComposer{}).Compose(context.Background(), "owner"); err == nil {
 		t.Fatal("Compose(empty) = nil, want an error")
+	}
+}
+
+func TestLiveComposerProgress(t *testing.T) {
+	composer, _, _ := liveComposerFixture()
+	var stages []string
+	if _, err := composer.ComposeWithProgress(context.Background(), "owner", func(stage, _ string, _ map[string]any) {
+		stages = append(stages, stage)
+	}); err != nil {
+		t.Fatalf("ComposeWithProgress: %v", err)
+	}
+	for _, want := range []string{"auth", "interests", "profile", "done"} {
+		found := false
+		for _, stage := range stages {
+			if stage == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("missing stage %q in %v", want, stages)
+		}
 	}
 }
