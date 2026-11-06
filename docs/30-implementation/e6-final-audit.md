@@ -64,8 +64,9 @@ download or a live model call. Those need the owner at the browser and local bin
    `ytfeed rate --dismiss` records `unrated`. `ytfeed feed` prints a one-line weekly
    prompt when a rating is due. Verified live: stats reported 502 units for the current
    day and the rating endpoint reported the week as due.
-4. **Trace wiring.** `T-052` writes spans, but the pipeline and transport do not call the
-   trace logger yet.
+4. **Trace wiring — closed 2026-11-06.** The pipeline records `feed.compose` and
+   `feed.analyze`; the HTTP server records `http.request` with method, path and status.
+   Verified live: `data/traces/2026-11-06.jsonl` contains a `GET /v1/stats` span.
 5. **Real model.** `T-035` is tested with an OpenAI-compatible fake. The S-01 spike
    measured `llama-server`, but the product pipeline has not called it in a live run.
 6. **`OQ-22`.** The onboarding profile is still the provisional `spike-s01` profile.

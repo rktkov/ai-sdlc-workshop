@@ -17,6 +17,7 @@ import (
 	"github.com/rktkov/ytfeed/internal/domain/feed"
 	"github.com/rktkov/ytfeed/internal/domain/identity"
 	"github.com/rktkov/ytfeed/internal/domain/taste"
+	"github.com/rktkov/ytfeed/internal/pkg/trace"
 	"github.com/rktkov/ytfeed/internal/repository/sqlite"
 	"github.com/rktkov/ytfeed/internal/repository/tokenfile"
 	"github.com/rktkov/ytfeed/internal/storage"
@@ -285,6 +286,9 @@ func runServeWith(ctx context.Context, args []string, getenv func(string) string
 		Stats:   httpapi.StatsHandler(&feed.StatsService{Repo: sqlite.NewStatsRepository(db)}, "owner"),
 		Rating:  httpapi.RatingHandler(&feed.RatingService{Repo: sqlite.NewRatingRepository(db)}, "owner"),
 	}, allowRemote)
+	traceLogger := trace.New(cfg.Storage.DataDir)
+	_, _ = traceLogger.Sweep(ctx)
+	handler = httpapi.TraceMiddleware(traceLogger, handler)
 
 	server := &http.Server{
 		Addr:              address,

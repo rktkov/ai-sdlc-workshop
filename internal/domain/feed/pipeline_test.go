@@ -2,13 +2,18 @@ package feed
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rktkov/ytfeed/internal/domain/analysis"
 	"github.com/rktkov/ytfeed/internal/domain/discovery"
 	"github.com/rktkov/ytfeed/internal/domain/identity"
+	"github.com/rktkov/ytfeed/internal/pkg/trace"
 )
 
 type fakePlanner struct {
@@ -569,5 +574,42 @@ func TestPipelineValidate(t *testing.T) {
 				t.Fatal("Run = nil, want an error")
 			}
 		})
+	}
+}
+
+func TestPipelineWritesSpans(t *testing.T) {
+	dir := t.TempDir()
+	logger := trace.New(dir)
+	pipeline := testPipeline(nil)
+	pipeline.Tracer = logger
+	pipeline.Size = 1
+	pipeline.BatchID = "b1"
+	if _, err := pipeline.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "traces"))
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("trace files = %d", len(entries))
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "traces", entries[0].Name()))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	names := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		var span map[string]any
+		if err := json.Unmarshal([]byte(line), &span); err != nil {
+			t.Fatalf("decode span: %v", err)
+		}
+		name, _ := span["name"].(string)
+		names[name] = true
+	}
+	for _, want := range []string{"feed.compose", "feed.analyze"} {
+		if !names[want] {
+			t.Fatalf("missing span %q in %v", want, names)
+		}
 	}
 }

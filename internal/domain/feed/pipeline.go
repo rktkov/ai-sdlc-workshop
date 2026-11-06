@@ -9,6 +9,7 @@ import (
 	"github.com/rktkov/ytfeed/internal/domain/analysis"
 	"github.com/rktkov/ytfeed/internal/domain/discovery"
 	"github.com/rktkov/ytfeed/internal/domain/identity"
+	"github.com/rktkov/ytfeed/internal/pkg/trace"
 )
 
 // Planner turns interests into search queries.
@@ -55,8 +56,9 @@ type Pipeline struct {
 	Analyzer    Analyzer
 	Analyses    Analyses
 
-	Now   func() time.Time
-	NewID func(videoID, rubricVersion string) string
+	Now    func() time.Time
+	NewID  func(videoID, rubricVersion string) string
+	Tracer *trace.Logger
 }
 
 // Result is one completed batch pipeline run.
@@ -68,7 +70,11 @@ type Result struct {
 }
 
 // Run executes the stages in order.
-func (p *Pipeline) Run(ctx context.Context) (Result, error) {
+func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
+	span := p.startSpan(ctx, "feed.compose", map[string]any{
+		"batch_id": p.BatchID, "size": p.Size, "interests": len(p.Interests),
+	})
+	defer func() { span.End(err) }()
 	if err := p.validate(); err != nil {
 		return Result{}, err
 	}
@@ -258,8 +264,10 @@ func (p *Pipeline) charge(ctx context.Context, reservationID string) error {
 	return nil
 }
 
-func (p *Pipeline) analyze(ctx context.Context, selected []discovery.SelectedCandidate) ([]analysis.Analysis, error) {
-	out := make([]analysis.Analysis, 0, len(selected))
+func (p *Pipeline) analyze(ctx context.Context, selected []discovery.SelectedCandidate) (out []analysis.Analysis, err error) {
+	span := p.startSpan(ctx, "feed.analyze", map[string]any{"batch_id": p.BatchID, "count": len(selected)})
+	defer func() { span.End(err) }()
+	out = make([]analysis.Analysis, 0, len(selected))
 	for _, candidate := range selected {
 		existing, err := p.Analyses.FindByKey(ctx, p.UserID, candidate.VideoID, p.RubricVersion)
 		if err == nil {
@@ -351,6 +359,13 @@ func (p *Pipeline) saveFailed(ctx context.Context, candidate discovery.SelectedC
 		return analysis.Analysis{}, fmt.Errorf("save failed analysis: %w", err)
 	}
 	return value, nil
+}
+
+func (p *Pipeline) startSpan(ctx context.Context, name string, attributes map[string]any) *trace.Span {
+	if p.Tracer == nil {
+		return &trace.Span{}
+	}
+	return p.Tracer.Start(ctx, name, attributes)
 }
 
 func (p *Pipeline) now() time.Time {
