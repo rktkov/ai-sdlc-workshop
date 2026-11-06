@@ -54,6 +54,7 @@ type Pipeline struct {
 	Subscriptions     []identity.Subscription
 	GraphChannelLimit int
 	GraphRelatedLimit int
+	ChannelCap        int
 
 	Planner     Planner
 	YouTube     discovery.YouTube
@@ -101,7 +102,7 @@ func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
 	} else {
 		p.report("plan", "keyword search is off for this source", nil)
 	}
-	videos, shortfall, err := p.discover(ctx, queries, source)
+	videos, state, shortfall, err := p.discover(ctx, queries, source)
 	if err != nil {
 		return Result{}, err
 	}
@@ -109,27 +110,14 @@ func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
 		return Result{Shortfall: shortfall}, nil
 	}
 
-	candidates := make([]discovery.Candidate, 0, len(videos))
-	for position, video := range videos {
-		candidateSource := video.Source
-		if candidateSource == "" {
-			candidateSource = discovery.SourceSearch
-		}
-		candidates = append(candidates, discovery.Candidate{
-			VideoID:         video.VideoID,
-			ChannelID:       video.ChannelID,
-			Title:           video.Title,
-			SubscriberCount: video.SubscriberCount,
-			TopicTags:       video.TopicTags,
-			Source:          candidateSource,
-			DiscoveryRank:   position,
-		})
-	}
-	p.report("select", fmt.Sprintf("selecting up to %d cards from %d candidates", p.Size, len(candidates)), nil)
-	selection, err := discovery.Select(candidates, p.Exclusions, p.Size, p.MicroTarget)
+	_, selection, err := p.expandPool(ctx, videos, state)
 	if err != nil {
 		return Result{}, err
 	}
+	if len(selection.Selected) < p.Size {
+		p.report("shortfall", fmt.Sprintf("only %d of %d unseen cards are available", len(selection.Selected), p.Size), nil)
+	}
+
 	analyses, err := p.analyze(ctx, selection.Selected)
 	if err != nil {
 		return Result{}, err
@@ -141,6 +129,11 @@ func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
 	batch, err := ComposeBatch(p.batchID(), p.UserID, p.Size, selection.Selected, byVideo)
 	if err != nil {
 		return Result{}, err
+	}
+	if len(selection.Selected) < p.Size {
+		batch.State = BatchDegraded
+		batch.DegradationReason = DegradeShortfall
+		batch.CompletedAt = p.now()
 	}
 	return Result{Selection: selection, Analyses: analyses, Batch: batch, Shortfall: selection.Shortfall}, nil
 }
@@ -167,72 +160,110 @@ func (p *Pipeline) validate() error {
 	return nil
 }
 
-func (p *Pipeline) discover(ctx context.Context, queries []discovery.Query, source discovery.RefreshSource) ([]discovery.Video, string, error) {
+const maxExpansionRounds = 10
+
+type searchCursor struct {
+	Query         discovery.Query
+	NextPageToken string
+	Unseen        int
+}
+
+type sourceState struct {
+	Search       []searchCursor
+	GraphLoaded  map[string]bool
+	GraphLimit   int
+	RelatedLimit int
+	Related      []string
+	UploadOrder  []string
+	UploadTokens map[string]string
+}
+
+type expansionResult struct {
+	Videos   []discovery.Video
+	Expanded bool
+	Quota    bool
+}
+
+func (p *Pipeline) discover(ctx context.Context, queries []discovery.Query, source discovery.RefreshSource) ([]discovery.Video, *sourceState, string, error) {
+	state := &sourceState{
+		GraphLoaded:  map[string]bool{},
+		GraphLimit:   p.graphChannelLimit(),
+		RelatedLimit: p.graphRelatedLimit(),
+		UploadTokens: map[string]string{},
+	}
 	var videos []discovery.Video
 	if source.UsesSearch() {
-		found, shortfall, err := p.search(ctx, queries)
+		found, cursors, shortfall, err := p.search(ctx, queries)
 		if err != nil {
-			return nil, "", err
+			return nil, nil, "", err
 		}
 		if shortfall == "quota" {
-			return found, "quota", nil
+			return found, state, "quota", nil
 		}
+		state.Search = cursors
 		videos = append(videos, found...)
 	}
 	if source.UsesTrending() {
 		found, err := p.trending(ctx)
 		if err != nil {
-			return nil, "", err
+			return nil, nil, "", err
 		}
 		videos = append(videos, found...)
 	}
+	state.Related = appendRelated(state.Related, videos)
 	if source.UsesGraph() {
-		found, err := p.graph(ctx, videos)
+		found, err := p.graph(ctx, state)
 		if err != nil {
-			return nil, "", err
+			return nil, nil, "", err
 		}
 		videos = append(videos, found...)
 	}
 	if len(videos) == 0 {
-		return nil, "", nil
+		return nil, state, "", nil
 	}
 	videos = dedupeVideos(videos)
 	enriched, shortfall, err := p.enrich(ctx, videos)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
-	return enriched, shortfall, nil
+	return enriched, state, shortfall, nil
 }
 
-func (p *Pipeline) search(ctx context.Context, queries []discovery.Query) ([]discovery.Video, string, error) {
+func (p *Pipeline) search(ctx context.Context, queries []discovery.Query) ([]discovery.Video, []searchCursor, string, error) {
 	var videos []discovery.Video
+	cursors := make([]searchCursor, 0, len(queries))
 	for index, query := range queries {
 		p.report("search", "searching: "+query.Text, map[string]any{"current": index + 1, "total": len(queries)})
 		reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallSearch)
 		if errors.Is(err, discovery.ErrQuotaExhausted) {
-			return videos, "quota", nil
+			return videos, cursors, "quota", nil
 		}
 		if err != nil {
-			return nil, "", fmt.Errorf("reserve search quota: %w", err)
+			return nil, nil, "", fmt.Errorf("reserve search quota: %w", err)
 		}
 		page, err := p.YouTube.SearchPage(ctx, p.AccessToken, query, "")
 		if err != nil {
 			_ = p.charge(ctx, reservation.ID)
 			if errors.Is(err, identity.ErrUnauthorized) {
-				return nil, "", err
+				return nil, nil, "", err
 			}
-			return videos, "quota", nil
+			return videos, cursors, "quota", nil
 		}
 		if err := p.charge(ctx, reservation.ID); err != nil {
-			return nil, "", err
+			return nil, nil, "", err
 		}
 		p.report("search_done", fmt.Sprintf("found %d results for %s", len(page.Videos), query.Text), map[string]any{"current": index + 1, "total": len(queries)})
 		for i := range page.Videos {
 			page.Videos[i].Source = discovery.SourceSearch
 		}
 		videos = append(videos, page.Videos...)
+		if page.NextPageToken != "" {
+			cursors = append(cursors, searchCursor{
+				Query: query, NextPageToken: page.NextPageToken, Unseen: p.unseenCount(page.Videos),
+			})
+		}
 	}
-	return videos, "", nil
+	return videos, cursors, "", nil
 }
 
 func (p *Pipeline) trending(ctx context.Context) ([]discovery.Video, error) {
@@ -264,17 +295,118 @@ func (p *Pipeline) trending(ctx context.Context) ([]discovery.Video, error) {
 	return videos, nil
 }
 
-func (p *Pipeline) graph(ctx context.Context, seeds []discovery.Video) ([]discovery.Video, error) {
-	related := make([]string, 0, len(seeds))
-	for _, video := range seeds {
-		related = append(related, video.ChannelID)
-	}
-	channelIDs := discovery.GraphChannelIDs(p.Subscriptions, related, p.graphChannelLimit(), p.graphRelatedLimit())
+func (p *Pipeline) graph(ctx context.Context, state *sourceState) ([]discovery.Video, error) {
+	channelIDs := discovery.GraphChannelIDs(p.Subscriptions, state.Related, state.GraphLimit, state.RelatedLimit)
+	channelIDs = p.newGraphChannels(channelIDs, state)
 	if len(channelIDs) == 0 {
 		p.report("graph", "no graph channels to read", nil)
 		return nil, nil
 	}
 	p.report("graph", fmt.Sprintf("reading uploads from %d graph channels", len(channelIDs)), nil)
+	return p.readUploads(ctx, channelIDs, state)
+}
+
+func (p *Pipeline) expand(ctx context.Context, state *sourceState) (expansionResult, error) {
+	if result, err := p.expandSearch(ctx, state); err != nil || result.Expanded {
+		return result, err
+	}
+	if result, err := p.expandGraphChannels(ctx, state); err != nil || result.Expanded {
+		return result, err
+	}
+	return p.expandUploads(ctx, state)
+}
+
+func (p *Pipeline) expandSearch(ctx context.Context, state *sourceState) (expansionResult, error) {
+	best := -1
+	for i := range state.Search {
+		if state.Search[i].NextPageToken == "" {
+			continue
+		}
+		if best == -1 || state.Search[i].Unseen > state.Search[best].Unseen {
+			best = i
+		}
+	}
+	if best == -1 {
+		return expansionResult{}, nil
+	}
+	cursor := &state.Search[best]
+	p.report("expand_search", "searching more: "+cursor.Query.Text, nil)
+	reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallSearch)
+	if errors.Is(err, discovery.ErrQuotaExhausted) {
+		return expansionResult{Quota: true}, nil
+	}
+	if err != nil {
+		return expansionResult{}, fmt.Errorf("reserve search quota: %w", err)
+	}
+	page, err := p.YouTube.SearchPage(ctx, p.AccessToken, cursor.Query, cursor.NextPageToken)
+	if err != nil {
+		_ = p.charge(ctx, reservation.ID)
+		if errors.Is(err, identity.ErrUnauthorized) {
+			return expansionResult{}, err
+		}
+		cursor.NextPageToken = ""
+		return expansionResult{}, nil
+	}
+	if err := p.charge(ctx, reservation.ID); err != nil {
+		return expansionResult{}, err
+	}
+	for i := range page.Videos {
+		page.Videos[i].Source = discovery.SourceSearch
+	}
+	cursor.NextPageToken = page.NextPageToken
+	cursor.Unseen = p.unseenCount(page.Videos)
+	state.Related = appendRelated(state.Related, page.Videos)
+	return expansionResult{Videos: page.Videos, Expanded: true}, nil
+}
+
+func (p *Pipeline) expandGraphChannels(ctx context.Context, state *sourceState) (expansionResult, error) {
+	state.GraphLimit *= 2
+	state.RelatedLimit *= 2
+	channelIDs := discovery.GraphChannelIDs(p.Subscriptions, state.Related, state.GraphLimit, state.RelatedLimit)
+	channelIDs = p.newGraphChannels(channelIDs, state)
+	if len(channelIDs) == 0 {
+		return expansionResult{}, nil
+	}
+	p.report("expand_graph", fmt.Sprintf("reading uploads from %d more graph channels", len(channelIDs)), nil)
+	videos, err := p.readUploads(ctx, channelIDs, state)
+	if err != nil {
+		return expansionResult{}, err
+	}
+	return expansionResult{Videos: videos, Expanded: true}, nil
+}
+
+func (p *Pipeline) expandUploads(ctx context.Context, state *sourceState) (expansionResult, error) {
+	for _, playlistID := range state.UploadOrder {
+		pageToken := state.UploadTokens[playlistID]
+		if pageToken == "" {
+			continue
+		}
+		p.report("expand_uploads", "reading more uploads: "+playlistID, nil)
+		page, shortfall, err := p.playlistItems(ctx, playlistID, pageToken, state)
+		if err != nil {
+			return expansionResult{}, err
+		}
+		if shortfall == "quota" {
+			return expansionResult{Quota: true}, nil
+		}
+		return expansionResult{Videos: page.Videos, Expanded: true}, nil
+	}
+	return expansionResult{}, nil
+}
+
+func (p *Pipeline) newGraphChannels(channelIDs []string, state *sourceState) []string {
+	out := make([]string, 0, len(channelIDs))
+	for _, channelID := range channelIDs {
+		if channelID == "" || state.GraphLoaded[channelID] {
+			continue
+		}
+		state.GraphLoaded[channelID] = true
+		out = append(out, channelID)
+	}
+	return out
+}
+
+func (p *Pipeline) readUploads(ctx context.Context, channelIDs []string, state *sourceState) ([]discovery.Video, error) {
 	channels, shortfall, err := p.channels(ctx, channelIDs)
 	if err != nil {
 		return nil, err
@@ -291,7 +423,7 @@ func (p *Pipeline) graph(ctx context.Context, seeds []discovery.Video) ([]discov
 			continue
 		}
 		p.report("graph_uploads", "reading uploads: "+channelID, nil)
-		page, shortfall, err := p.playlistItems(ctx, playlistID)
+		page, shortfall, err := p.playlistItems(ctx, playlistID, "", state)
 		if err != nil {
 			return nil, err
 		}
@@ -305,7 +437,7 @@ func (p *Pipeline) graph(ctx context.Context, seeds []discovery.Video) ([]discov
 	return videos, nil
 }
 
-func (p *Pipeline) playlistItems(ctx context.Context, playlistID string) (discovery.VideoPage, string, error) {
+func (p *Pipeline) playlistItems(ctx context.Context, playlistID, pageToken string, state *sourceState) (discovery.VideoPage, string, error) {
 	reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallPlaylistItems)
 	if errors.Is(err, discovery.ErrQuotaExhausted) {
 		return discovery.VideoPage{}, "quota", nil
@@ -313,7 +445,7 @@ func (p *Pipeline) playlistItems(ctx context.Context, playlistID string) (discov
 	if err != nil {
 		return discovery.VideoPage{}, "", fmt.Errorf("reserve playlist items quota: %w", err)
 	}
-	page, err := p.YouTube.PlaylistItems(ctx, p.AccessToken, playlistID, "")
+	page, err := p.YouTube.PlaylistItems(ctx, p.AccessToken, playlistID, pageToken)
 	if err != nil {
 		_ = p.charge(ctx, reservation.ID)
 		if errors.Is(err, identity.ErrUnauthorized) {
@@ -327,6 +459,12 @@ func (p *Pipeline) playlistItems(ctx context.Context, playlistID string) (discov
 	}
 	for i := range page.Videos {
 		page.Videos[i].Source = discovery.SourceGraph
+	}
+	if state != nil {
+		if _, ok := state.UploadTokens[playlistID]; !ok {
+			state.UploadOrder = append(state.UploadOrder, playlistID)
+		}
+		state.UploadTokens[playlistID] = page.NextPageToken
 	}
 	return page, "", nil
 }
@@ -570,6 +708,162 @@ func (p *Pipeline) newID(videoID, rubricVersion string) string {
 	return fmt.Sprintf("analysis-%s-%s", videoID, rubricVersion)
 }
 
+func (p *Pipeline) expandPool(ctx context.Context, videos []discovery.Video, state *sourceState) ([]discovery.Video, discovery.Selection, error) {
+	selection, err := p.selectVideos(videos)
+	if err != nil {
+		return nil, discovery.Selection{}, err
+	}
+	for round := 0; len(selection.Selected) < p.Size && round < maxExpansionRounds; round++ {
+		expansion, err := p.expand(ctx, state)
+		if err != nil {
+			return nil, discovery.Selection{}, err
+		}
+		if expansion.Quota || !expansion.Expanded {
+			break
+		}
+		added := newVideos(videos, expansion.Videos)
+		if len(added) == 0 {
+			continue
+		}
+		enriched, shortfall, err := p.enrich(ctx, added)
+		if err != nil {
+			return nil, discovery.Selection{}, err
+		}
+		if shortfall == "quota" {
+			break
+		}
+		videos = dedupeVideos(append(videos, enriched...))
+		selection, err = p.selectVideos(videos)
+		if err != nil {
+			return nil, discovery.Selection{}, err
+		}
+	}
+	return videos, selection, nil
+}
+
+func (p *Pipeline) selectVideos(videos []discovery.Video) (discovery.Selection, error) {
+	videos = orderVideos(videos, p.refreshSource())
+	candidates := make([]discovery.Candidate, 0, len(videos))
+	for position, video := range videos {
+		candidateSource := video.Source
+		if candidateSource == "" {
+			candidateSource = discovery.SourceSearch
+		}
+		candidates = append(candidates, discovery.Candidate{
+			VideoID:         video.VideoID,
+			ChannelID:       video.ChannelID,
+			Title:           video.Title,
+			SubscriberCount: video.SubscriberCount,
+			TopicTags:       video.TopicTags,
+			Source:          candidateSource,
+			DiscoveryRank:   position,
+		})
+	}
+	p.report("select", fmt.Sprintf("selecting up to %d cards from %d candidates", p.Size, len(candidates)), nil)
+	return discovery.Select(candidates, p.Exclusions, p.Size, p.MicroTarget, p.channelCap())
+}
+
+func (p *Pipeline) refreshSource() discovery.RefreshSource {
+	if p.Source == "" {
+		return discovery.RefreshMixed
+	}
+	return p.Source
+}
+
+func orderVideos(videos []discovery.Video, source discovery.RefreshSource) []discovery.Video {
+	var order []discovery.CandidateSource
+	switch source {
+	case discovery.RefreshKeywords:
+		order = []discovery.CandidateSource{discovery.SourceSearch}
+	case discovery.RefreshTrending:
+		order = []discovery.CandidateSource{discovery.SourceTrending, discovery.SourceSearch}
+	case discovery.RefreshGraph:
+		order = []discovery.CandidateSource{discovery.SourceGraph, discovery.SourceSearch}
+	case discovery.RefreshFresh:
+		order = []discovery.CandidateSource{discovery.SourceTrending, discovery.SourceGraph}
+	default:
+		order = []discovery.CandidateSource{discovery.SourceGraph, discovery.SourceTrending, discovery.SourceSearch}
+	}
+	groups := map[discovery.CandidateSource][]discovery.Video{}
+	for _, video := range videos {
+		groups[video.Source] = append(groups[video.Source], video)
+	}
+	indexes := map[discovery.CandidateSource]int{}
+	out := make([]discovery.Video, 0, len(videos))
+	for {
+		added := false
+		for _, candidateSource := range order {
+			position := indexes[candidateSource]
+			if position >= len(groups[candidateSource]) {
+				continue
+			}
+			out = append(out, groups[candidateSource][position])
+			indexes[candidateSource] = position + 1
+			added = true
+		}
+		if !added {
+			break
+		}
+	}
+	listed := map[discovery.CandidateSource]bool{}
+	for _, candidateSource := range order {
+		listed[candidateSource] = true
+	}
+	for _, video := range videos {
+		if !listed[video.Source] {
+			out = append(out, video)
+		}
+	}
+	return out
+}
+
+func (p *Pipeline) unseenCount(videos []discovery.Video) int {
+	seen := map[string]bool{}
+	for _, video := range videos {
+		if video.VideoID == "" || seen[video.VideoID] || p.excluded(video.VideoID) {
+			continue
+		}
+		seen[video.VideoID] = true
+	}
+	return len(seen)
+}
+
+func (p *Pipeline) excluded(videoID string) bool {
+	return p.Exclusions.Watched[videoID] || p.Exclusions.Saved[videoID] || p.Exclusions.Shown7d[videoID]
+}
+
+func newVideos(known []discovery.Video, candidates []discovery.Video) []discovery.Video {
+	seen := make(map[string]bool, len(known))
+	for _, video := range known {
+		seen[video.VideoID] = true
+	}
+	out := make([]discovery.Video, 0, len(candidates))
+	for _, video := range candidates {
+		if video.VideoID == "" || seen[video.VideoID] {
+			continue
+		}
+		seen[video.VideoID] = true
+		out = append(out, video)
+	}
+	return out
+}
+
+func appendRelated(related []string, videos []discovery.Video) []string {
+	seen := make(map[string]bool, len(related))
+	for _, channelID := range related {
+		seen[channelID] = true
+	}
+	for _, video := range videos {
+		channelID := video.ChannelID
+		if channelID == "" || seen[channelID] {
+			continue
+		}
+		seen[channelID] = true
+		related = append(related, channelID)
+	}
+	return related
+}
+
 func dedupeVideos(videos []discovery.Video) []discovery.Video {
 	index := make(map[string]int, len(videos))
 	out := make([]discovery.Video, 0, len(videos))
@@ -598,6 +892,13 @@ func (p *Pipeline) graphRelatedLimit() int {
 		return 10
 	}
 	return p.GraphRelatedLimit
+}
+
+func (p *Pipeline) channelCap() int {
+	if p.ChannelCap <= 0 {
+		return 2
+	}
+	return p.ChannelCap
 }
 
 func mergeVideo(base, detail discovery.Video) discovery.Video {

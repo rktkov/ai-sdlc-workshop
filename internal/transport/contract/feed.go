@@ -88,6 +88,8 @@ func bannerFor(batch feed.Batch) string {
 		return "yt-dlp missing — saved videos only"
 	case feed.DegradePartial:
 		return "partial feed"
+	case feed.DegradeShortfall:
+		return fmt.Sprintf("only %d of %d unseen videos available — no repeats", len(batch.Cards), batch.Size)
 	default:
 		return "degraded feed"
 	}

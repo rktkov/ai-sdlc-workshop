@@ -73,3 +73,20 @@ func TestFeedBanner(t *testing.T) {
 		t.Fatalf("feed = %+v", got)
 	}
 }
+
+func TestFeedShortfallBanner(t *testing.T) {
+	batch := feed.Batch{
+		ID: "b", Size: 20, State: feed.BatchDegraded, DegradationReason: feed.DegradeShortfall,
+		Cards: []feed.Card{
+			{CardID: "c1", VideoID: "v1", Title: "t", Channel: "ch", State: feed.StatePending, Position: 0},
+			{CardID: "c2", VideoID: "v2", Title: "t", Channel: "ch", State: feed.StatePending, Position: 1},
+		},
+	}
+	got := FeedFromBatch(batch)
+	if got.DegradationReason != "unseen_shortfall" {
+		t.Fatalf("reason = %q", got.DegradationReason)
+	}
+	if got.Banner != "only 2 of 20 unseen videos available — no repeats" {
+		t.Fatalf("banner = %q", got.Banner)
+	}
+}

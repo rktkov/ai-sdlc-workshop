@@ -25,7 +25,7 @@ func TestSelectHappy(t *testing.T) {
 		}
 		candidates = append(candidates, candidate(string(rune('a'+i)), source, i, subscribers))
 	}
-	selection, err := Select(candidates, ExclusionSet{}, 20, 0.2)
+	selection, err := Select(candidates, ExclusionSet{}, 20, 0.2, 2)
 	if err != nil {
 		t.Fatalf("Select: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestSelectDedupe(t *testing.T) {
 		candidate("v1", SourceSearch, 1, 1000),
 		candidate("v1", SourceGraph, 0, 1000),
 	}
-	selection, err := Select(candidates, ExclusionSet{}, 20, 0.2)
+	selection, err := Select(candidates, ExclusionSet{}, 20, 0.2, 2)
 	if err != nil {
 		t.Fatalf("Select: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestSelectExclusions(t *testing.T) {
 		Saved:   map[string]bool{"saved": true},
 		Shown7d: map[string]bool{"shown": true},
 	}
-	selection, err := Select(candidates, exclusions, 20, 0.2)
+	selection, err := Select(candidates, exclusions, 20, 0.2, 2)
 	if err != nil {
 		t.Fatalf("Select: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestSelectMicroBloggerTarget(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		candidates = append(candidates, candidate(string(rune('a'+i)), SourceSearch, 2+i, 500000))
 	}
-	selection, err := Select(candidates, ExclusionSet{}, 10, 0.2)
+	selection, err := Select(candidates, ExclusionSet{}, 10, 0.2, 2)
 	if err != nil {
 		t.Fatalf("Select: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestSelectMicroBloggerShortfall(t *testing.T) {
 	for i := 0; i < 9; i++ {
 		candidates = append(candidates, candidate(string(rune('a'+i)), SourceSearch, 1+i, 500000))
 	}
-	selection, err := Select(candidates, ExclusionSet{}, 10, 0.2)
+	selection, err := Select(candidates, ExclusionSet{}, 10, 0.2, 2)
 	if err != nil {
 		t.Fatalf("Select: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestSelectFewerThanSize(t *testing.T) {
 		candidate("v1", SourceSearch, 0, 1000),
 		candidate("v2", SourceSearch, 1, 1000),
 	}
-	selection, err := Select(candidates, ExclusionSet{}, 20, 0.2)
+	selection, err := Select(candidates, ExclusionSet{}, 20, 0.2, 2)
 	if err != nil {
 		t.Fatalf("Select: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestSelectFewerThanSize(t *testing.T) {
 }
 
 func TestSelectEmpty(t *testing.T) {
-	selection, err := Select(nil, ExclusionSet{}, 20, 0.2)
+	selection, err := Select(nil, ExclusionSet{}, 20, 0.2, 2)
 	if err != nil {
 		t.Fatalf("Select: %v", err)
 	}
@@ -166,28 +166,58 @@ func TestSelectEmpty(t *testing.T) {
 }
 
 func TestSelectInvalidSize(t *testing.T) {
-	if _, err := Select(nil, ExclusionSet{}, 0, 0.2); err == nil {
+	if _, err := Select(nil, ExclusionSet{}, 0, 0.2, 2); err == nil {
 		t.Fatal("Select(size 0) = nil, want an error")
 	}
-	if _, err := Select(nil, ExclusionSet{}, 21, 0.2); err == nil {
+	if _, err := Select(nil, ExclusionSet{}, 21, 0.2, 2); err == nil {
 		t.Fatal("Select(size 21) = nil, want an error")
 	}
 }
 
-func TestSelectSourcePriority(t *testing.T) {
+func TestSelectDiscoveryOrder(t *testing.T) {
 	candidates := []Candidate{
-		candidate("trending", SourceTrending, 0, 1000),
-		candidate("search", SourceSearch, 0, 1000),
+		candidate("trending", SourceTrending, 2, 1000),
+		candidate("search", SourceSearch, 1, 1000),
 		candidate("graph", SourceGraph, 0, 1000),
 	}
-	selection, err := Select(candidates, ExclusionSet{}, 3, 0.2)
+	selection, err := Select(candidates, ExclusionSet{}, 3, 0.2, 2)
 	if err != nil {
 		t.Fatalf("Select: %v", err)
 	}
-	want := []string{"graph", "trending", "search"}
+	want := []string{"graph", "search", "trending"}
 	for i, selected := range selection.Selected {
 		if selected.VideoID != want[i] {
 			t.Fatalf("selected %d = %q, want %q", i, selected.VideoID, want[i])
 		}
+	}
+}
+
+func TestSelectChannelCap(t *testing.T) {
+	candidates := []Candidate{
+		candidate("v1", SourceSearch, 0, 1000),
+		candidate("v2", SourceSearch, 1, 1000),
+		candidate("v3", SourceSearch, 2, 1000),
+	}
+	candidates[0].ChannelID = "same"
+	candidates[1].ChannelID = "same"
+	candidates[2].ChannelID = "same"
+	selection, err := Select(candidates, ExclusionSet{}, 3, 0.2, 2)
+	if err != nil {
+		t.Fatalf("Select: %v", err)
+	}
+	if len(selection.Selected) != 2 {
+		t.Fatalf("selected = %d, want 2", len(selection.Selected))
+	}
+	if selection.Shortfall != "channel_cap" {
+		t.Fatalf("shortfall = %q", selection.Shortfall)
+	}
+	found := false
+	for _, excluded := range selection.Excluded {
+		if excluded.VideoID == "v3" && excluded.Reason == ExclusionChannelCap {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("excluded = %+v", selection.Excluded)
 	}
 }

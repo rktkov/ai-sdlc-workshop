@@ -20,7 +20,7 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Feed.Size != 20 || cfg.Feed.RefreshSource != "mixed" {
 		t.Fatalf("Feed = %+v", cfg.Feed)
 	}
-	if cfg.Feed.GraphChannelLimit != 20 || cfg.Feed.GraphRelatedLimit != 10 {
+	if cfg.Feed.GraphChannelLimit != 20 || cfg.Feed.GraphRelatedLimit != 10 || cfg.Feed.ChannelCap != 2 {
 		t.Fatalf("Feed graph limits = %+v", cfg.Feed)
 	}
 	if cfg.LLM.BaseURL != "http://localhost:11434/v1" {
@@ -48,6 +48,7 @@ func TestLoadOverrides(t *testing.T) {
 		"FEED_REFRESH_SOURCE":      "trending",
 		"FEED_GRAPH_CHANNEL_LIMIT": "5",
 		"FEED_GRAPH_RELATED_LIMIT": "3",
+		"FEED_CHANNEL_CAP":         "4",
 		"LLM_BASE_URL":             "http://127.0.0.1:8080/v1",
 		"LLM_MODEL":                "test-model",
 		"LLM_API_KEY":              "secret",
@@ -65,7 +66,7 @@ func TestLoadOverrides(t *testing.T) {
 	if cfg.App.LogEnv != "production" || cfg.App.LogLevel != "debug" {
 		t.Fatalf("App = %+v", cfg.App)
 	}
-	if cfg.Feed.Size != 12 || cfg.Feed.RefreshSource != "trending" || cfg.Feed.GraphChannelLimit != 5 || cfg.Feed.GraphRelatedLimit != 3 {
+	if cfg.Feed.Size != 12 || cfg.Feed.RefreshSource != "trending" || cfg.Feed.GraphChannelLimit != 5 || cfg.Feed.GraphRelatedLimit != 3 || cfg.Feed.ChannelCap != 4 {
 		t.Fatalf("Feed = %+v", cfg.Feed)
 	}
 	if cfg.LLM.JSONMode {
@@ -87,6 +88,7 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 		"FEED_REFRESH_SOURCE":      "random",
 		"FEED_GRAPH_CHANNEL_LIMIT": "0",
 		"FEED_GRAPH_RELATED_LIMIT": "-1",
+		"FEED_CHANNEL_CAP":         "0",
 		"LLM_BASE_URL":             "ftp://example.com",
 		"LLM_JSON_MODE":            "maybe",
 	}
@@ -96,7 +98,7 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 		t.Fatal("Load() = nil, want an error")
 	}
 
-	for _, want := range []string{"LOG_ENV", "LOG_LEVEL", "FEED_SIZE", "FEED_REFRESH_SOURCE", "FEED_GRAPH_CHANNEL_LIMIT", "FEED_GRAPH_RELATED_LIMIT", "LLM_BASE_URL", "LLM_JSON_MODE"} {
+	for _, want := range []string{"LOG_ENV", "LOG_LEVEL", "FEED_SIZE", "FEED_REFRESH_SOURCE", "FEED_GRAPH_CHANNEL_LIMIT", "FEED_GRAPH_RELATED_LIMIT", "FEED_CHANNEL_CAP", "LLM_BASE_URL", "LLM_JSON_MODE"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error %q does not mention %s", err, want)
 		}

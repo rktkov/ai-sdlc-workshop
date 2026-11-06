@@ -33,6 +33,7 @@ type FeedConfig struct {
 	RefreshSource     string // FEED_REFRESH_SOURCE, default mixed
 	GraphChannelLimit int    // FEED_GRAPH_CHANNEL_LIMIT, default 20
 	GraphRelatedLimit int    // FEED_GRAPH_RELATED_LIMIT, default 10
+	ChannelCap        int    // FEED_CHANNEL_CAP, default 2
 }
 
 // YouTubeConfig controls the optional Google integrations.
@@ -101,6 +102,7 @@ func defaultConfig(getenv func(string) string) Config {
 			RefreshSource:     valueOr(getenv, "FEED_REFRESH_SOURCE", "mixed"),
 			GraphChannelLimit: 20,
 			GraphRelatedLimit: 10,
+			ChannelCap:        2,
 		},
 		YouTube: YouTubeConfig{
 			OAuthClientFile: strings.TrimSpace(getenv("GOOGLE_OAUTH_CLIENT_FILE")),
@@ -164,6 +166,14 @@ func parseFeed(getenv func(string) string, cfg *Config) []string {
 			problems = append(problems, "FEED_GRAPH_RELATED_LIMIT must be an integer between 0 and 50")
 		} else {
 			cfg.Feed.GraphRelatedLimit = value
+		}
+	}
+	if raw := strings.TrimSpace(getenv("FEED_CHANNEL_CAP")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > 20 {
+			problems = append(problems, "FEED_CHANNEL_CAP must be an integer between 1 and 20")
+		} else {
+			cfg.Feed.ChannelCap = value
 		}
 	}
 	return problems
@@ -249,6 +259,7 @@ func (c Config) Redacted() map[string]string {
 		"feed_refresh_source":       c.Feed.RefreshSource,
 		"feed_graph_channel_limit":  strconv.Itoa(c.Feed.GraphChannelLimit),
 		"feed_graph_related_limit":  strconv.Itoa(c.Feed.GraphRelatedLimit),
+		"feed_channel_cap":          strconv.Itoa(c.Feed.ChannelCap),
 		"llm_base_url":              c.LLM.BaseURL,
 		"llm_model":                 c.LLM.Model,
 		"llm_api_key":               key,

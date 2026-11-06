@@ -10,10 +10,11 @@ import (
 type ExclusionReason string
 
 const (
-	ExclusionWatched   ExclusionReason = "watched"
-	ExclusionSaved     ExclusionReason = "saved"
-	ExclusionShown7d   ExclusionReason = "shown_7d"
-	ExclusionDuplicate ExclusionReason = "duplicate"
+	ExclusionWatched    ExclusionReason = "watched"
+	ExclusionSaved      ExclusionReason = "saved"
+	ExclusionShown7d    ExclusionReason = "shown_7d"
+	ExclusionDuplicate  ExclusionReason = "duplicate"
+	ExclusionChannelCap ExclusionReason = "channel_cap"
 )
 
 const microBloggerLimit = 100000
@@ -57,13 +58,16 @@ type Selection struct {
 	Shortfall         string
 }
 
-// Select applies exclusions, dedupe and the micro-blogger target.
-func Select(candidates []Candidate, exclusions ExclusionSet, size int, microTarget float64) (Selection, error) {
+// Select applies exclusions, dedupe, the channel cap and the micro-blogger target.
+func Select(candidates []Candidate, exclusions ExclusionSet, size int, microTarget float64, channelCap int) (Selection, error) {
 	if size < 1 || size > 20 {
 		return Selection{}, errors.New("selection size must be between 1 and 20")
 	}
 	if microTarget <= 0 || microTarget > 1 {
 		microTarget = 0.2
+	}
+	if channelCap <= 0 {
+		channelCap = 2
 	}
 
 	selection := Selection{}
@@ -86,34 +90,14 @@ func Select(candidates []Candidate, exclusions ExclusionSet, size int, microTarg
 	}
 
 	sort.SliceStable(kept, func(i, j int) bool {
-		iPriority := sourcePriority(kept[i].Source)
-		jPriority := sourcePriority(kept[j].Source)
-		if iPriority != jPriority {
-			return iPriority < jPriority
-		}
 		if kept[i].DiscoveryRank != kept[j].DiscoveryRank {
 			return kept[i].DiscoveryRank < kept[j].DiscoveryRank
 		}
 		return kept[i].VideoID < kept[j].VideoID
 	})
 
-	targetMicro := int(math.Ceil(float64(size) * microTarget))
-	chosen := map[string]bool{}
-	for _, candidate := range kept {
-		if len(chosen) >= targetMicro {
-			break
-		}
-		if candidate.SubscriberCount < microBloggerLimit {
-			chosen[candidate.VideoID] = true
-		}
-	}
-	for _, candidate := range kept {
-		if len(chosen) >= size {
-			break
-		}
-		chosen[candidate.VideoID] = true
-	}
-
+	chosen, capExcluded := chooseCandidates(kept, size, int(math.Ceil(float64(size)*microTarget)), channelCap)
+	selection.Excluded = append(selection.Excluded, capExcluded...)
 	micro := 0
 	for _, candidate := range kept {
 		if !chosen[candidate.VideoID] {
@@ -132,18 +116,24 @@ func Select(candidates []Candidate, exclusions ExclusionSet, size int, microTarg
 	if len(selection.Selected) > 0 {
 		selection.MicroBloggerShare = float64(micro) / float64(len(selection.Selected))
 	}
-	selection.Shortfall = shortfall(selection, size, microTarget, len(selection.Excluded))
+	selection.Shortfall = shortfall(selection, size, microTarget, len(selection.Excluded)-len(capExcluded), len(capExcluded))
 	return selection, nil
 }
 
-func shortfall(selection Selection, size int, microTarget float64, excluded int) string {
+func shortfall(selection Selection, size int, microTarget float64, excluded, capExcluded int) string {
 	if len(selection.Selected) == 0 {
+		if capExcluded > 0 {
+			return "channel_cap"
+		}
 		if excluded > 0 {
 			return "dedupe"
 		}
 		return "no_candidates"
 	}
 	if len(selection.Selected) < size {
+		if capExcluded > 0 {
+			return "channel_cap"
+		}
 		if excluded > 0 {
 			return "dedupe"
 		}
@@ -153,6 +143,50 @@ func shortfall(selection Selection, size int, microTarget float64, excluded int)
 		return "micro_blogger_shortfall"
 	}
 	return ""
+}
+
+func chooseCandidates(kept []Candidate, size, targetMicro, channelCap int) (map[string]bool, []ExcludedCandidate) {
+	chosen := map[string]bool{}
+	channelCount := map[string]int{}
+	canTake := func(candidate Candidate) bool {
+		if candidate.ChannelID == "" {
+			return true
+		}
+		return channelCount[candidate.ChannelID] < channelCap
+	}
+	take := func(candidate Candidate) {
+		chosen[candidate.VideoID] = true
+		if candidate.ChannelID != "" {
+			channelCount[candidate.ChannelID]++
+		}
+	}
+	for _, candidate := range kept {
+		if len(chosen) >= targetMicro {
+			break
+		}
+		if candidate.SubscriberCount < microBloggerLimit && canTake(candidate) {
+			take(candidate)
+		}
+	}
+	for _, candidate := range kept {
+		if len(chosen) >= size {
+			break
+		}
+		if chosen[candidate.VideoID] || !canTake(candidate) {
+			continue
+		}
+		take(candidate)
+	}
+	var capExcluded []ExcludedCandidate
+	for _, candidate := range kept {
+		if chosen[candidate.VideoID] {
+			continue
+		}
+		if candidate.ChannelID != "" && channelCount[candidate.ChannelID] >= channelCap {
+			capExcluded = append(capExcluded, ExcludedCandidate{Candidate: candidate, Reason: ExclusionChannelCap})
+		}
+	}
+	return chosen, capExcluded
 }
 
 func exclusionReason(videoID string, exclusions ExclusionSet) ExclusionReason {

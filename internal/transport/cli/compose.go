@@ -234,7 +234,7 @@ func newLiveComposer(cfg config.Config, db *sql.DB) *liveComposer {
 			UserID: "owner", AccessToken: token.AccessToken, Interests: interests,
 			Size: cfg.Feed.Size, MicroTarget: 0.2, RubricVersion: profile.RubricVersion,
 			ModelID: cfg.LLM.Model, Staging: cfg.Analysis.Staging, Source: source, Exclusions: exclusions,
-			Subscriptions: subscriptions, GraphChannelLimit: cfg.Feed.GraphChannelLimit, GraphRelatedLimit: cfg.Feed.GraphRelatedLimit,
+			Subscriptions: subscriptions, GraphChannelLimit: cfg.Feed.GraphChannelLimit, GraphRelatedLimit: cfg.Feed.GraphRelatedLimit, ChannelCap: cfg.Feed.ChannelCap,
 			Planner: discovery.QueryPlanner{}, YouTube: youtubeSource, Quota: quota,
 			Fetcher: fetcher, Transcripts: staging, Analyzer: analyzer,
 			Analyses: sqlite.NewAnalysisRepository(db),

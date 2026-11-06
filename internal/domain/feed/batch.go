@@ -38,10 +38,11 @@ const (
 type DegradationReason string
 
 const (
-	DegradeQuota   DegradationReason = "quota_exhausted"
-	DegradeNetwork DegradationReason = "network_unavailable"
-	DegradeYTDLP   DegradationReason = "ytdlp_missing"
-	DegradePartial DegradationReason = "partial"
+	DegradeQuota     DegradationReason = "quota_exhausted"
+	DegradeNetwork   DegradationReason = "network_unavailable"
+	DegradeYTDLP     DegradationReason = "ytdlp_missing"
+	DegradePartial   DegradationReason = "partial"
+	DegradeShortfall DegradationReason = "unseen_shortfall"
 )
 
 // Batch is one ordered set of cards.

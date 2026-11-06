@@ -38,6 +38,7 @@ type fakeYouTube struct {
 	trending    []discovery.Video
 	trendingErr error
 	metas       map[string]identity.Subscription
+	searchPages map[string]discovery.VideoPage
 	playlists   map[string]discovery.VideoPage
 	playlistErr map[string]error
 	playlistIDs []string
@@ -54,10 +55,16 @@ func (f *fakeYouTube) Search(context.Context, string, discovery.Query) ([]discov
 	return f.videos, f.err
 }
 
-func (f *fakeYouTube) SearchPage(context.Context, string, discovery.Query, string) (discovery.VideoPage, error) {
+func (f *fakeYouTube) SearchPage(_ context.Context, _ string, _ discovery.Query, pageToken string) (discovery.VideoPage, error) {
 	f.record("search")
 	f.searchN++
-	return discovery.VideoPage{Videos: f.videos}, f.err
+	if f.err != nil {
+		return discovery.VideoPage{}, f.err
+	}
+	if page, ok := f.searchPages[pageToken]; ok {
+		return page, nil
+	}
+	return discovery.VideoPage{Videos: f.videos}, nil
 }
 
 func (f *fakeYouTube) PlaylistItems(_ context.Context, _ string, playlistID, _ string) (discovery.VideoPage, error) {
@@ -818,4 +825,125 @@ func TestPipelineTrendingPriority(t *testing.T) {
 	if len(result.Selection.Selected) == 0 || result.Selection.Selected[0].VideoID != "t1" {
 		t.Fatalf("selected = %+v", result.Selection.Selected)
 	}
+}
+
+func TestPipelineExpandsSearchForUnseen(t *testing.T) {
+	var calls []string
+	pipeline := testPipeline(&calls)
+	pipeline.Source = discovery.RefreshKeywords
+	pipeline.Size = 3
+	pipeline.Exclusions = discovery.ExclusionSet{Shown7d: map[string]bool{"v1": true, "v2": true, "v3": true}}
+	fake := pipeline.YouTube.(*fakeYouTube)
+	fake.videos = []discovery.Video{
+		{VideoID: "v1", ChannelID: "c1"}, {VideoID: "v2", ChannelID: "c2"}, {VideoID: "v3", ChannelID: "c3"},
+		{VideoID: "v4", ChannelID: "c1"}, {VideoID: "v5", ChannelID: "c2"}, {VideoID: "v6", ChannelID: "c3"},
+	}
+	fake.searchPages = map[string]discovery.VideoPage{
+		"":   {Videos: fake.videos[:3], NextPageToken: "p2"},
+		"p2": {Videos: fake.videos[3:]},
+	}
+	result, err := pipeline.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if fake.searchN != 2 {
+		t.Fatalf("search calls = %d, want 2", fake.searchN)
+	}
+	if len(result.Selection.Selected) != 3 {
+		t.Fatalf("selected = %d, want 3", len(result.Selection.Selected))
+	}
+	for _, selected := range result.Selection.Selected {
+		if selected.VideoID == "v1" || selected.VideoID == "v2" || selected.VideoID == "v3" {
+			t.Fatalf("selected a shown video: %+v", selected)
+		}
+	}
+	if result.Batch.State != BatchCompleted || result.Shortfall != "" {
+		t.Fatalf("batch = %+v, shortfall = %q", result.Batch, result.Shortfall)
+	}
+}
+
+func TestPipelineShortfallNeverPads(t *testing.T) {
+	var calls []string
+	pipeline := testPipeline(&calls)
+	pipeline.Source = discovery.RefreshKeywords
+	pipeline.Size = 3
+	fake := pipeline.YouTube.(*fakeYouTube)
+	fake.videos = []discovery.Video{{VideoID: "v1", ChannelID: "c1"}, {VideoID: "v2", ChannelID: "c2"}}
+	result, err := pipeline.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(result.Batch.Cards) != 2 {
+		t.Fatalf("cards = %d, want 2", len(result.Batch.Cards))
+	}
+	if result.Batch.State != BatchDegraded || result.Batch.DegradationReason != DegradeShortfall {
+		t.Fatalf("batch = %+v", result.Batch)
+	}
+	if result.Shortfall != "no_candidates" {
+		t.Fatalf("shortfall = %q", result.Shortfall)
+	}
+}
+
+func TestPipelineChannelCapShortfall(t *testing.T) {
+	var calls []string
+	pipeline := testPipeline(&calls)
+	pipeline.Source = discovery.RefreshKeywords
+	pipeline.Size = 3
+	fake := pipeline.YouTube.(*fakeYouTube)
+	fake.videos = []discovery.Video{
+		{VideoID: "v1", ChannelID: "same"},
+		{VideoID: "v2", ChannelID: "same"},
+		{VideoID: "v3", ChannelID: "same"},
+	}
+	fake.metas = map[string]identity.Subscription{"same": {ChannelID: "same", SubscriberCount: 1000}}
+	result, err := pipeline.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(result.Batch.Cards) != 2 {
+		t.Fatalf("cards = %d, want 2", len(result.Batch.Cards))
+	}
+	if result.Batch.DegradationReason != DegradeShortfall || result.Shortfall != "channel_cap" {
+		t.Fatalf("batch = %+v, shortfall = %q", result.Batch, result.Shortfall)
+	}
+}
+
+func TestOrderVideosMixed(t *testing.T) {
+	videos := []discovery.Video{
+		{VideoID: "g1", Source: discovery.SourceGraph},
+		{VideoID: "g2", Source: discovery.SourceGraph},
+		{VideoID: "t1", Source: discovery.SourceTrending},
+		{VideoID: "s1", Source: discovery.SourceSearch},
+		{VideoID: "s2", Source: discovery.SourceSearch},
+	}
+	got := orderVideos(videos, discovery.RefreshMixed)
+	want := []string{"g1", "t1", "s1", "g2", "s2"}
+	for i := range want {
+		if got[i].VideoID != want[i] {
+			t.Fatalf("order = %v, want %v", videoIDs(got), want)
+		}
+	}
+}
+
+func TestOrderVideosFresh(t *testing.T) {
+	videos := []discovery.Video{
+		{VideoID: "s1", Source: discovery.SourceSearch},
+		{VideoID: "g1", Source: discovery.SourceGraph},
+		{VideoID: "t1", Source: discovery.SourceTrending},
+	}
+	got := orderVideos(videos, discovery.RefreshFresh)
+	want := []string{"t1", "g1", "s1"}
+	for i := range want {
+		if got[i].VideoID != want[i] {
+			t.Fatalf("order = %v, want %v", videoIDs(got), want)
+		}
+	}
+}
+
+func videoIDs(videos []discovery.Video) []string {
+	out := make([]string, 0, len(videos))
+	for _, video := range videos {
+		out = append(out, video.VideoID)
+	}
+	return out
 }
