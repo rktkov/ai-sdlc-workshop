@@ -176,6 +176,17 @@ Plan: [`refresh-plan.md`](refresh-plan.md). Status: approved 2026-11-06.
 | `T-066` | DONE | T-065 | M | Interactive card updates and the source picker refresh path. |
 | `T-067` | DONE | T-060…T-066 | M | Quota document, contract tests and the no-repeat E2E proof. |
 
+Live verification on 2026-11-07: schema 13 applied to `data/ytfeed.db`. `ytfeed feed
+--refresh --source fresh` returned 3 cards from trending and subscription uploads. A second
+refresh returned 3 different video IDs. No ID repeated across the two batches.
+
+Open follow-ups:
+
+- Batch cards do not copy views, duration, publish date or the channel title from discovery
+  metadata. The card shows the channel ID and zero values.
+- Trending and fresh sources can select music or entertainment videos without transcripts.
+  The batch still shows the cards as failed. Consider a source-aware prefilter.
+
 
 ## Progress
 
