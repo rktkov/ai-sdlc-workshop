@@ -58,8 +58,12 @@ download or a live model call. Those need the owner at the browser and local bin
    `batch-1793961392159263000` was composed from one real YouTube search result, the card
    was stored as `analysis_slow` because the local LLM was unreachable, and a second
    `feed --json` returned the same cached batch.
-3. **Stats and rating UI.** `T-051` and `T-053` have domain and SQLite tests. The
-   `ytfeed stats` and weekly prompt are not wired to the CLI or HTTP API.
+3. **Stats and rating UI — closed 2026-11-06.** `GET /v1/stats` and `GET/POST
+   /v1/rating` are wired. `ytfeed stats [--json]` prints swipes, reasons, cold periods,
+   quota trend and topics. `ytfeed rate --value -1|0|1` records the week;
+   `ytfeed rate --dismiss` records `unrated`. `ytfeed feed` prints a one-line weekly
+   prompt when a rating is due. Verified live: stats reported 502 units for the current
+   day and the rating endpoint reported the week as due.
 4. **Trace wiring.** `T-052` writes spans, but the pipeline and transport do not call the
    trace logger yet.
 5. **Real model.** `T-035` is tested with an OpenAI-compatible fake. The S-01 spike

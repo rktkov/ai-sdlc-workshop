@@ -31,15 +31,36 @@ func HandlerWithGestureRemote(token, version string, schemaVersion int, gesture 
 	return HandlerWithFeatures(token, version, schemaVersion, gesture, nil, allowRemote)
 }
 
+// FeatureHandlers groups the optional local API endpoints.
+type FeatureHandlers struct {
+	Gesture http.HandlerFunc
+	Feed    http.HandlerFunc
+	Stats   http.HandlerFunc
+	Rating  http.HandlerFunc
+}
+
 // HandlerWithFeatures adds the gesture and feed endpoints.
 func HandlerWithFeatures(token, version string, schemaVersion int, gesture, feedHandler http.HandlerFunc, allowRemote bool) http.Handler {
+	return HandlerWithHandlers(token, version, schemaVersion, FeatureHandlers{
+		Gesture: gesture, Feed: feedHandler,
+	}, allowRemote)
+}
+
+// HandlerWithHandlers adds every configured endpoint.
+func HandlerWithHandlers(token, version string, schemaVersion int, handlers FeatureHandlers, allowRemote bool) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", health(version, schemaVersion))
-	if gesture != nil {
-		mux.HandleFunc("/v1/gestures", gesture)
+	if handlers.Gesture != nil {
+		mux.HandleFunc("/v1/gestures", handlers.Gesture)
 	}
-	if feedHandler != nil {
-		mux.HandleFunc("/v1/feed", feedHandler)
+	if handlers.Feed != nil {
+		mux.HandleFunc("/v1/feed", handlers.Feed)
+	}
+	if handlers.Stats != nil {
+		mux.HandleFunc("/v1/stats", handlers.Stats)
+	}
+	if handlers.Rating != nil {
+		mux.HandleFunc("/v1/rating", handlers.Rating)
 	}
 	if allowRemote {
 		return auth(token, mux)

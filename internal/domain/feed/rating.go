@@ -50,6 +50,14 @@ type RatingService struct {
 	ID   func() string
 }
 
+// Last returns the newest rating for the user.
+func (s *RatingService) Last(ctx context.Context, userID string) (WeeklyRating, error) {
+	if s.Repo == nil {
+		return WeeklyRating{}, errors.New("rating repository is nil")
+	}
+	return s.Repo.LastForUser(ctx, userID)
+}
+
 // ShouldPrompt reports whether the current week has no rating.
 func (s *RatingService) ShouldPrompt(ctx context.Context, userID string) (bool, error) {
 	if s.Repo == nil {

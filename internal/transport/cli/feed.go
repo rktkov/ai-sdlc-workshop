@@ -56,6 +56,7 @@ func runFeed(ctx context.Context, args []string, getenv func(string) string, std
 	if code := feedHTTPError(resp, stderr); code >= 0 {
 		return code
 	}
+	maybeRatingPrompt(ctx, token, baseURL, stderr)
 	if jsonOut || strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
 		return renderFeedJSON(resp.Body, stdout, stderr)
 	}

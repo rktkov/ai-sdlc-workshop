@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rktkov/ytfeed/internal/config"
+	"github.com/rktkov/ytfeed/internal/domain/feed"
 	"github.com/rktkov/ytfeed/internal/domain/identity"
 	"github.com/rktkov/ytfeed/internal/domain/taste"
 	"github.com/rktkov/ytfeed/internal/repository/sqlite"
@@ -49,6 +50,10 @@ func RunWithInput(ctx context.Context, args []string, getenv func(string) string
 	switch args[0] {
 	case "feed":
 		return runFeed(ctx, args[1:], getenv, stdout, stderr, baseURL)
+	case "stats":
+		return runStats(ctx, args[1:], getenv, stdout, stderr, baseURL)
+	case "rate":
+		return runRate(ctx, args[1:], getenv, stdout, stderr, baseURL)
 	case "onboard":
 		return runOnboard(ctx, args[1:], getenv, stdin, stdout, stderr)
 	case "auth":
@@ -274,12 +279,12 @@ func runServeWith(ctx context.Context, args []string, getenv func(string) string
 		Composer: newLiveComposer(cfg, db),
 		UserID:   "owner",
 	}
-	handler := httpapi.HandlerWithFeatures(
-		token, Version, schemaVersion,
-		httpapi.GestureHandler(tasteService, "owner"),
-		httpapi.FeedHandler(cachedFeed),
-		allowRemote,
-	)
+	handler := httpapi.HandlerWithHandlers(token, Version, schemaVersion, httpapi.FeatureHandlers{
+		Gesture: httpapi.GestureHandler(tasteService, "owner"),
+		Feed:    httpapi.FeedHandler(cachedFeed),
+		Stats:   httpapi.StatsHandler(&feed.StatsService{Repo: sqlite.NewStatsRepository(db)}, "owner"),
+		Rating:  httpapi.RatingHandler(&feed.RatingService{Repo: sqlite.NewRatingRepository(db)}, "owner"),
+	}, allowRemote)
 
 	server := &http.Server{
 		Addr:              address,
@@ -299,6 +304,9 @@ func printHelp(w io.Writer) {
 	buf.WriteString("Usage:\n")
 	buf.WriteString("  ytfeed feed              Show today's cards\n")
 	buf.WriteString("  ytfeed feed --json       Print one JSON feed object\n")
+	buf.WriteString("  ytfeed stats             Show swipe, cold-period and quota stats\n")
+	buf.WriteString("  ytfeed rate --value -1|0|1  Record the weekly rating\n")
+	buf.WriteString("  ytfeed rate --dismiss    Record the week as unrated\n")
 	buf.WriteString("  ytfeed onboard           Connect Google and choose interests\n")
 	buf.WriteString("  ytfeed auth login        Authorize YouTube access\n")
 	buf.WriteString("  ytfeed auth status       Show the stored credential\n")

@@ -40,6 +40,10 @@ func wireCard() contract.FeedCard {
 
 func TestFeedSSE(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/rating" {
+			http.NotFound(w, r)
+			return
+		}
 		if got := r.Header.Get("Accept"); got != "text/event-stream" {
 			t.Errorf("Accept = %q", got)
 		}
@@ -63,6 +67,10 @@ func TestFeedSSE(t *testing.T) {
 
 func TestFeedJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/rating" {
+			http.NotFound(w, r)
+			return
+		}
 		if got := r.Header.Get("Accept"); got != "application/json" {
 			t.Errorf("Accept = %q", got)
 		}
