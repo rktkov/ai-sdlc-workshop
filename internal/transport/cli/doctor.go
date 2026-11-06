@@ -65,7 +65,7 @@ func runDoctorWith(ctx context.Context, getenv func(string) string, stdout, stde
 	_, _ = fmt.Fprintf(stdout, "schema: %d\n", schema)
 
 	printAPIToken(stdout, dataDir)
-	printOAuthToken(stdout, dataDir)
+	printOAuthToken(stdout, dataDir, now)
 	printQuota(ctx, stdout, db, now)
 	printYTDLP(stdout, deps)
 	printLLM(ctx, stdout, cfg, deps)
@@ -81,7 +81,7 @@ func printAPIToken(stdout io.Writer, dataDir string) {
 	_, _ = fmt.Fprintln(stdout, "api_token: present")
 }
 
-func printOAuthToken(stdout io.Writer, dataDir string) {
+func printOAuthToken(stdout io.Writer, dataDir string, now time.Time) {
 	store := tokenfile.New(dataDir)
 	token, err := store.Read(context.Background())
 	if errors.Is(err, identity.ErrTokenNotFound) {
@@ -93,7 +93,7 @@ func printOAuthToken(stdout io.Writer, dataDir string) {
 		return
 	}
 	status := "active"
-	if !token.ExpiresAt.After(time.Now().UTC()) {
+	if !token.ExpiresAt.After(now) {
 		status = "expired"
 	}
 	if err := store.CheckPermissions(); err != nil {
