@@ -18,6 +18,7 @@ const (
 	CallChannels      QuotaCall = "channels"
 	CallSubscriptions QuotaCall = "subscriptions"
 	CallMostPopular   QuotaCall = "most_popular"
+	CallPlaylistItems QuotaCall = "playlist_items"
 )
 
 // ReservationState is the terminal or open state of one reservation.
@@ -43,7 +44,7 @@ func Units(call QuotaCall) int {
 	switch call {
 	case CallSearch:
 		return 100
-	case CallVideos, CallChannels, CallSubscriptions, CallMostPopular:
+	case CallVideos, CallChannels, CallSubscriptions, CallMostPopular, CallPlaylistItems:
 		return 1
 	default:
 		return 0

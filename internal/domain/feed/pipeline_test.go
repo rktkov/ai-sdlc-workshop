@@ -49,6 +49,17 @@ func (f *fakeYouTube) Search(context.Context, string, discovery.Query) ([]discov
 	return f.videos, f.err
 }
 
+func (f *fakeYouTube) SearchPage(context.Context, string, discovery.Query, string) (discovery.VideoPage, error) {
+	f.record("search")
+	f.searchN++
+	return discovery.VideoPage{Videos: f.videos}, f.err
+}
+
+func (f *fakeYouTube) PlaylistItems(context.Context, string, string, string) (discovery.VideoPage, error) {
+	f.record("playlist_items")
+	return discovery.VideoPage{}, nil
+}
+
 func (f *fakeYouTube) Channels(context.Context, string, []string) (map[string]identity.Subscription, error) {
 	f.record("channels")
 	return f.metas, f.chErr

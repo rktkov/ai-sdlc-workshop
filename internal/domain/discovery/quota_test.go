@@ -46,6 +46,7 @@ func TestQuotaUnits(t *testing.T) {
 		CallChannels:      1,
 		CallSubscriptions: 1,
 		CallMostPopular:   1,
+		CallPlaylistItems: 1,
 		QuotaCall("bad"):  0,
 	}
 	for call, want := range tests {

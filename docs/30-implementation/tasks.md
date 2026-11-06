@@ -51,6 +51,7 @@
 | `T-055` | DONE | 2026-11-05 | Final gate: `make check`, `make coverage-check` and `make test-e2e` pass. Integration uses fakes; live data remains open. |
 | `T-063` | DONE | 2026-11-06 | Migration v13 adds `shown_videos`. Batch save marks cards and prunes rows older than 90 days. Exclusions read the full window. |
 | `T-060` | DONE | 2026-11-06 | Refresh source model with five modes. `FEED_REFRESH_SOURCE`, `X-Ytfeed-Source`, `--source` and the interactive picker. |
+| `T-061` | DONE | 2026-11-06 | YouTube `SearchPage` and `PlaylistItems`, uploads playlist metadata on channel reads, and the `playlist_items` quota call. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`

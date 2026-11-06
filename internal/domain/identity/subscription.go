@@ -9,10 +9,11 @@ import (
 
 // Subscription is one imported channel.
 type Subscription struct {
-	ChannelID       string
-	Title           string
-	SubscriberCount int64
-	TopicTags       []string
+	ChannelID         string
+	Title             string
+	SubscriberCount   int64
+	TopicTags         []string
+	UploadsPlaylistID string
 }
 
 // SubscriptionPage is one page from the subscription source.

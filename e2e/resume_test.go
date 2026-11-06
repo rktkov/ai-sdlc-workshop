@@ -27,6 +27,12 @@ type resumeYouTube struct{}
 func (resumeYouTube) Search(context.Context, string, discovery.Query) ([]discovery.Video, error) {
 	return []discovery.Video{{VideoID: "dQw4w9WgXcQ", ChannelID: "c1", Title: "Video"}}, nil
 }
+func (resumeYouTube) SearchPage(context.Context, string, discovery.Query, string) (discovery.VideoPage, error) {
+	return discovery.VideoPage{Videos: []discovery.Video{{VideoID: "dQw4w9WgXcQ", ChannelID: "c1", Title: "Video"}}}, nil
+}
+func (resumeYouTube) PlaylistItems(context.Context, string, string, string) (discovery.VideoPage, error) {
+	return discovery.VideoPage{}, nil
+}
 func (resumeYouTube) Channels(context.Context, string, []string) (map[string]identity.Subscription, error) {
 	return map[string]identity.Subscription{"c1": {ChannelID: "c1", Title: "Channel", SubscriberCount: 1000}}, nil
 }

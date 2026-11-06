@@ -45,12 +45,24 @@ type videoItem struct {
 
 // Search runs one search.list call.
 func (s *Source) Search(ctx context.Context, accessToken string, query discovery.Query) ([]discovery.Video, error) {
+	page, err := s.SearchPage(ctx, accessToken, query, "")
+	if err != nil {
+		return nil, err
+	}
+	return page.Videos, nil
+}
+
+// SearchPage runs one search.list call with an optional page token.
+func (s *Source) SearchPage(ctx context.Context, accessToken string, query discovery.Query, pageToken string) (discovery.VideoPage, error) {
 	params := url.Values{}
 	params.Set("part", "snippet")
 	params.Set("type", "video")
 	params.Set("q", queryText(query))
 	params.Set("maxResults", strconv.Itoa(maxResults(query.MaxResults)))
 	params.Set("order", order(query.Order))
+	if pageToken != "" {
+		params.Set("pageToken", pageToken)
+	}
 	days := query.Days
 	if days <= 0 {
 		days = 30
@@ -62,13 +74,14 @@ func (s *Source) Search(ctx context.Context, accessToken string, query discovery
 
 	body, err := s.get(ctx, "search", params, accessToken)
 	if err != nil {
-		return nil, err
+		return discovery.VideoPage{}, err
 	}
 	var page struct {
-		Items []searchItem `json:"items"`
+		Items         []searchItem `json:"items"`
+		NextPageToken string       `json:"nextPageToken"`
 	}
 	if err := json.Unmarshal(body, &page); err != nil {
-		return nil, fmt.Errorf("decode search: %w", err)
+		return discovery.VideoPage{}, fmt.Errorf("decode search: %w", err)
 	}
 	out := make([]discovery.Video, 0, len(page.Items))
 	for _, item := range page.Items {
@@ -83,7 +96,63 @@ func (s *Source) Search(ctx context.Context, accessToken string, query discovery
 			PublishedAt: parseTime(item.Snippet.PublishedAt),
 		})
 	}
-	return out, nil
+	return discovery.VideoPage{Videos: out, NextPageToken: page.NextPageToken}, nil
+}
+
+// PlaylistItems reads one page of an uploads playlist.
+func (s *Source) PlaylistItems(ctx context.Context, accessToken, playlistID, pageToken string) (discovery.VideoPage, error) {
+	if strings.TrimSpace(playlistID) == "" {
+		return discovery.VideoPage{}, fmt.Errorf("playlist id is empty")
+	}
+	params := url.Values{}
+	params.Set("part", "snippet,contentDetails")
+	params.Set("playlistId", playlistID)
+	params.Set("maxResults", "50")
+	if pageToken != "" {
+		params.Set("pageToken", pageToken)
+	}
+	body, err := s.get(ctx, "playlistItems", params, accessToken)
+	if err != nil {
+		return discovery.VideoPage{}, err
+	}
+	var page struct {
+		Items []struct {
+			Snippet struct {
+				ChannelID   string `json:"channelId"`
+				Title       string `json:"title"`
+				Description string `json:"description"`
+				PublishedAt string `json:"publishedAt"`
+				ResourceID  struct {
+					VideoID string `json:"videoId"`
+				} `json:"resourceId"`
+			} `json:"snippet"`
+			ContentDetails struct {
+				VideoID string `json:"videoId"`
+			} `json:"contentDetails"`
+		} `json:"items"`
+		NextPageToken string `json:"nextPageToken"`
+	}
+	if err := json.Unmarshal(body, &page); err != nil {
+		return discovery.VideoPage{}, fmt.Errorf("decode playlist items: %w", err)
+	}
+	out := make([]discovery.Video, 0, len(page.Items))
+	for _, item := range page.Items {
+		videoID := item.ContentDetails.VideoID
+		if videoID == "" {
+			videoID = item.Snippet.ResourceID.VideoID
+		}
+		if videoID == "" {
+			continue
+		}
+		out = append(out, discovery.Video{
+			VideoID:     videoID,
+			ChannelID:   item.Snippet.ChannelID,
+			Title:       item.Snippet.Title,
+			Description: item.Snippet.Description,
+			PublishedAt: parseTime(item.Snippet.PublishedAt),
+		})
+	}
+	return discovery.VideoPage{Videos: out, NextPageToken: page.NextPageToken}, nil
 }
 
 // Videos returns metadata for video IDs in chunks of 50.

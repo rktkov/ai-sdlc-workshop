@@ -67,8 +67,11 @@ func TestChannels(t *testing.T) {
 		if got := r.URL.Query().Get("id"); got != "c1,c2" {
 			t.Errorf("id = %q", got)
 		}
+		if got := r.URL.Query().Get("part"); !strings.Contains(got, "contentDetails") {
+			t.Errorf("part = %q", got)
+		}
 		_, _ = fmt.Fprint(w, `{"items":[
-			{"id":"c1","snippet":{"title":"One"},"statistics":{"subscriberCount":"100"},"topicDetails":{"topicCategories":["https://en.wikipedia.org/wiki/Technology"]}},
+			{"id":"c1","snippet":{"title":"One"},"statistics":{"subscriberCount":"100"},"topicDetails":{"topicCategories":["https://en.wikipedia.org/wiki/Technology"]},"contentDetails":{"relatedPlaylists":{"uploads":"uploads-c1"}}},
 			{"id":"c2","snippet":{"title":"Two"},"statistics":{"subscriberCount":"hidden"}}
 		]}`)
 	})
@@ -82,6 +85,9 @@ func TestChannels(t *testing.T) {
 	}
 	if got["c1"].SubscriberCount != 100 || len(got["c1"].TopicTags) != 1 {
 		t.Fatalf("c1 = %+v", got["c1"])
+	}
+	if got["c1"].UploadsPlaylistID != "uploads-c1" {
+		t.Fatalf("uploads = %q", got["c1"].UploadsPlaylistID)
 	}
 	if got["c2"].SubscriberCount != 0 {
 		t.Fatalf("c2 = %+v", got["c2"])

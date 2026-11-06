@@ -90,6 +90,11 @@ type channelPage struct {
 		TopicDetails struct {
 			TopicCategories []string `json:"topicCategories"`
 		} `json:"topicDetails"`
+		ContentDetails struct {
+			RelatedPlaylists struct {
+				Uploads string `json:"uploads"`
+			} `json:"relatedPlaylists"`
+		} `json:"contentDetails"`
 	} `json:"items"`
 }
 
@@ -98,7 +103,7 @@ func (s *Source) Channels(ctx context.Context, accessToken string, channelIDs []
 	out := make(map[string]identity.Subscription, len(channelIDs))
 	for _, chunk := range chunkIDs(channelIDs, 50) {
 		params := url.Values{}
-		params.Set("part", "snippet,statistics,topicDetails")
+		params.Set("part", "snippet,statistics,topicDetails,contentDetails")
 		params.Set("id", strings.Join(chunk, ","))
 		body, err := s.get(ctx, "channels", params, accessToken)
 		if err != nil {
@@ -111,10 +116,11 @@ func (s *Source) Channels(ctx context.Context, accessToken string, channelIDs []
 		for _, item := range page.Items {
 			subscriberCount, _ := strconv.ParseInt(item.Statistics.SubscriberCount, 10, 64)
 			out[item.ID] = identity.Subscription{
-				ChannelID:       item.ID,
-				Title:           item.Snippet.Title,
-				SubscriberCount: subscriberCount,
-				TopicTags:       append([]string(nil), item.TopicDetails.TopicCategories...),
+				ChannelID:         item.ID,
+				Title:             item.Snippet.Title,
+				SubscriberCount:   subscriberCount,
+				TopicTags:         append([]string(nil), item.TopicDetails.TopicCategories...),
+				UploadsPlaylistID: item.ContentDetails.RelatedPlaylists.Uploads,
 			}
 		}
 	}

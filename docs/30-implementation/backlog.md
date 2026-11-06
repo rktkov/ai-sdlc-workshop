@@ -168,7 +168,7 @@ Plan: [`refresh-plan.md`](refresh-plan.md). Status: approved 2026-11-06.
 | Task | Status | Deps | Size | Acceptance |
 |------|--------|------|------|------------|
 | `T-060` | DONE | — | M | Source modes `mixed`, `trending`, `graph`, `fresh` and `keywords`. Config, HTTP header, CLI flag and interactive picker. |
-| `T-061` | TODO | T-060 | M | `SearchPage`, `playlistItems.list` and uploads playlist metadata. Quota call `playlist_items`. |
+| `T-061` | DONE | T-060 | M | `SearchPage`, `playlistItems.list`, uploads playlist metadata and quota call `playlist_items`. |
 | `T-062` | TODO | T-061 | M | Trending and graph candidate sources merge in the pipeline. |
 | `T-063` | DONE | — | M | `shown_videos`, 90-day pruning, full exclusion and mark on batch save. Schema 13. |
 | `T-064` | TODO | T-062, T-063 | M | Per-channel cap, candidate expansion and the 20-unseen guarantee with a shortfall banner. |
@@ -224,3 +224,4 @@ Plan: [`refresh-plan.md`](refresh-plan.md). Status: approved 2026-11-06.
 | 2026-11-05 | `T-055` | DONE. Final check, coverage and integration gate pass. See `e6-final-audit.md`. |
 | 2026-11-06 | `T-063` | DONE. Migration v13 adds `shown_videos`. Batch save marks cards and prunes rows older than 90 days. Exclusions read the full window. |
 | 2026-11-06 | `T-060` | DONE. Refresh source model with five modes. `FEED_REFRESH_SOURCE`, `X-Ytfeed-Source`, `--source` and the interactive picker. `make check` and `make coverage-check` pass. |
+| 2026-11-06 | `T-061` | DONE. YouTube `SearchPage` and `PlaylistItems`, uploads playlist metadata on channel reads, and the `playlist_items` quota call. |

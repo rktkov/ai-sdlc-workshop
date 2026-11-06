@@ -156,3 +156,66 @@ func TestRequestURLPreservesQuery(t *testing.T) {
 		t.Fatalf("url = %q", got)
 	}
 }
+
+func TestSearchPage(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("pageToken"); got != "p2" {
+			t.Errorf("pageToken = %q", got)
+		}
+		_, _ = fmt.Fprint(w, `{"items":[
+			{"id":{"videoId":"v2"},"snippet":{"channelId":"c2","title":"Two","publishedAt":"2026-11-02T10:00:00Z"}}
+		],"nextPageToken":"p3"}`)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	page, err := NewSource(server.URL, server.Client()).SearchPage(context.Background(), "token", discovery.Query{
+		Text: "ai", MaxResults: 10, Order: "relevance", Days: 30,
+	}, "p2")
+	if err != nil {
+		t.Fatalf("SearchPage: %v", err)
+	}
+	if len(page.Videos) != 1 || page.Videos[0].VideoID != "v2" || page.NextPageToken != "p3" {
+		t.Fatalf("page = %+v", page)
+	}
+}
+
+func TestPlaylistItems(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/playlistItems", func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if got := query.Get("playlistId"); got != "uploads-c1" {
+			t.Errorf("playlistId = %q", got)
+		}
+		if got := query.Get("maxResults"); got != "50" {
+			t.Errorf("maxResults = %q", got)
+		}
+		if got := query.Get("pageToken"); got != "p2" {
+			t.Errorf("pageToken = %q", got)
+		}
+		_, _ = fmt.Fprint(w, `{"items":[
+			{"snippet":{"channelId":"c1","title":"One","description":"Desc","publishedAt":"2026-11-01T10:00:00Z","resourceId":{"videoId":"v1"}},"contentDetails":{"videoId":"v1"}},
+			{"snippet":{"channelId":"c1","title":"No id"}}
+		],"nextPageToken":"p3"}`)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	page, err := NewSource(server.URL, server.Client()).PlaylistItems(context.Background(), "token", "uploads-c1", "p2")
+	if err != nil {
+		t.Fatalf("PlaylistItems: %v", err)
+	}
+	if len(page.Videos) != 1 || page.Videos[0].VideoID != "v1" || page.Videos[0].ChannelID != "c1" {
+		t.Fatalf("videos = %+v", page.Videos)
+	}
+	if page.NextPageToken != "p3" {
+		t.Fatalf("next = %q", page.NextPageToken)
+	}
+}
+
+func TestPlaylistItemsEmptyID(t *testing.T) {
+	if _, err := NewSource("https://example.test", nil).PlaylistItems(context.Background(), "token", " ", ""); err == nil {
+		t.Fatal("PlaylistItems = nil, want an error")
+	}
+}
