@@ -112,9 +112,9 @@ is now wired into `serve` through the cached-feed provider. The library/playback
 are not yet wired to the HTTP API.
 
 **E6 status:** `T-050`…`T-055` are `DONE` (2026-11-05). Local diagnostics, stats, traces,
-weekly rating, cached feed and the final coverage gate pass. The live Google/yt-dlp/model
-run, stats/rating UI wiring and trace call sites remain open. See
-[`e6-final-audit.md`](e6-final-audit.md).
+weekly rating, cached feed and the final coverage gate pass. The post-E6 items are also
+closed: live consent, live composition, stats/rating UI, trace call sites, a live model
+run and `OQ-22`. See [`e6-final-audit.md`](e6-final-audit.md).
 
 ## 8. Day 3 — loop and quality
 
@@ -156,7 +156,7 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-06 | Stats and rating UI | Closed. HTTP endpoints, `ytfeed stats`, `ytfeed rate` and the feed weekly hint are wired and verified live. |
 | 2026-11-06 | Trace call sites | Closed. Pipeline and HTTP spans are written; verified in `data/traces/2026-11-06.jsonl`. |
 | 2026-11-06 | Real model run | Closed. `llama-server` b12110 with the 1.2B model produced an `analyzed` card (`blueberry-consumption-myths`, score `0.6875`). |
-| Open | `OQ-22` | The provisional `spike-s01` profile remains. |
+| 2026-11-06 | `OQ-22` | Closed. The four S-01 axes are rubric v1 at weight 0.5; migration 0012 updates profiles. |
 
 ## Progress
 

@@ -313,7 +313,7 @@ func ensureInterests(ctx context.Context, profiles *sqlite.ProfileRepository, ta
 		if err := profiles.Save(ctx, profile); err != nil {
 			return fmt.Errorf("create profile: %w", err)
 		}
-		_, _ = fmt.Fprintln(stdout, "using provisional profile rubric=spike-s01")
+		_, _ = fmt.Fprintln(stdout, "using profile rubric=v1")
 		return nil
 	}
 	if err != nil {
@@ -326,7 +326,7 @@ func provisionalProfile(userID string, interests []string) taste.Profile {
 	return taste.Profile{
 		UserID:        userID,
 		Note:          "provisional onboarding profile",
-		RubricVersion: "spike-s01",
+		RubricVersion: "v1",
 		Axes: []taste.Axis{
 			{Name: "depth", Weight: 0.5, PositiveExamples: []string{"substantive explanation"}, NegativeExamples: []string{"shallow summary"}},
 			{Name: "novelty", Weight: 0.5, PositiveExamples: []string{"new angle"}, NegativeExamples: []string{"repeated take"}},

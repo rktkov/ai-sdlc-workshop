@@ -385,7 +385,7 @@ F35–F40, provider abstraction for Postgres, accessibility work.
 |---|----------|-------|-----------|
 | Q1 | Which LFM2.5 size/quant clears the bar on the target laptop (schema validity, rubric agreement, tok/s, RAM)? | Owner + agent | **Answered 2026-11-04.** `LFM2.5-1.2B-Instruct QAD Q4_0` is the v1 default on the Intel target. `2.6B` and the dense `3B` fail the latency bar. `350M` fails quality. |
 | Q2 | What is the opencode server API surface, and is it stable enough to be provider B? | Agent | **Yes** for provider B. No for v1 |
-| Q3 | What are the named value axes, weights and examples for rubric v1? | Owner + agent draft | **Yes** for F10 quality |
+| Q3 | What are the named value axes, weights and examples for rubric v1? | Owner + agent draft | **Answered 2026-11-06.** Rubric v1 uses `depth`, `novelty`, `signal-to-noise` and `practical-value`, each weight `0.5`. Positive/negative examples are recorded in the onboarding profile. `rubric_version=v1`. |
 | Q4 | What subscriber threshold defines a "micro-blogger"? | Owner | No. The default is < 100k and configurable |
 | Q5 | What daily quota budget should the composer target? | Owner | No. The default is 80% of 10k |
 | Q6 | Are external trend adapters worth building, or is YouTube trending enough? | Owner | No. It is P1 |

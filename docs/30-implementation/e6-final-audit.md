@@ -71,4 +71,7 @@ download or a live model call. Those need the owner at the browser and local bin
    `LFM2.5-1.2B-Instruct QAD Q4_0`. The live pipeline composed a card, called the model
    and stored an `analyzed` result: topic `blueberry-consumption-myths`, score `0.6875`.
    The previous cached card was cleared first so the model was actually called.
-6. **`OQ-22`.** The onboarding profile is still the provisional `spike-s01` profile.
+6. **`OQ-22` — closed 2026-11-06.** The four S-01 axes are rubric v1:
+   `depth`, `novelty`, `signal-to-noise`, `practical-value`, each weight `0.5`.
+   `rubric_version=v1`. Migration `0012` updates existing profiles; old analyses keep
+   `spike-s01`.

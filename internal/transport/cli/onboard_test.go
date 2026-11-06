@@ -54,7 +54,7 @@ func TestOnboardHappy(t *testing.T) {
 	if len(profile.Interests) != 2 || profile.Interests[0] != "ai-agents" {
 		t.Fatalf("interests = %v", profile.Interests)
 	}
-	if profile.RubricVersion != "spike-s01" {
+	if profile.RubricVersion != "v1" {
 		t.Fatalf("rubric = %q", profile.RubricVersion)
 	}
 }
@@ -268,7 +268,7 @@ func TestProvisionalProfileValid(t *testing.T) {
 	if err := profile.Validate(); err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
-	if profile.RubricVersion != "spike-s01" {
+	if profile.RubricVersion != "v1" {
 		t.Fatalf("rubric = %q", profile.RubricVersion)
 	}
 	if len(profile.Axes) < 3 {

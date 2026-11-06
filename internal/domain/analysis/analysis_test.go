@@ -15,7 +15,7 @@ func validProfile() taste.ProfileSnapshot {
 	return taste.ProfileSnapshot{
 		UserID:        "owner",
 		Note:          "prefer depth",
-		RubricVersion: "spike-s01",
+		RubricVersion: "v1",
 		Axes: []taste.Axis{
 			{Name: "depth", Weight: 0.7, PositiveExamples: []string{"long explanation"}, NegativeExamples: []string{"shallow"}},
 			{Name: "novelty", Weight: 0.5, PositiveExamples: []string{"new angle"}, NegativeExamples: []string{"repeat"}},
@@ -179,7 +179,7 @@ func TestAnalyzeHappy(t *testing.T) {
 	if analysis.State != StateAnalyzed {
 		t.Fatalf("state = %q, reason = %q", analysis.State, analysis.Reason)
 	}
-	if analysis.Topic != "ai-agents" || analysis.RubricVersion != "spike-s01" || analysis.ModelID != "model-1" {
+	if analysis.Topic != "ai-agents" || analysis.RubricVersion != "v1" || analysis.ModelID != "model-1" {
 		t.Fatalf("analysis = %+v", analysis)
 	}
 	if len(analysis.AxisScores) != 3 || analysis.AxisScores[0].Axis != "depth" {
