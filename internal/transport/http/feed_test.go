@@ -271,3 +271,18 @@ func TestFeedErrorMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestLiveFeedProviderRefresh(t *testing.T) {
+	composer := &stubComposer{batch: feedBatch()}
+	provider := LiveFeedProvider{Store: stubFeedStore{batch: feedBatch()}, Composer: composer, UserID: "owner"}
+	ctx := WithRefresh(context.Background())
+	if !RefreshRequested(ctx) {
+		t.Fatal("RefreshRequested = false")
+	}
+	if _, err := provider.Feed(ctx, "owner"); err != nil {
+		t.Fatalf("Feed: %v", err)
+	}
+	if composer.calls != 1 {
+		t.Fatalf("compose calls = %d, want 1", composer.calls)
+	}
+}

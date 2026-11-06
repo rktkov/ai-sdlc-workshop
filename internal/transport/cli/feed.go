@@ -18,7 +18,7 @@ import (
 )
 
 func runFeed(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer, baseURL string) int {
-	jsonOut, code := parseFeedFlags(args, stderr)
+	jsonOut, refresh, code := parseFeedFlags(args, stderr)
 	if code != 0 {
 		return code
 	}
@@ -46,6 +46,9 @@ func runFeed(ctx context.Context, args []string, getenv func(string) string, std
 	} else {
 		request.Header.Set("Accept", "text/event-stream")
 	}
+	if refresh {
+		request.Header.Set("X-Ytfeed-Refresh", "true")
+	}
 
 	resp, err := (&http.Client{Timeout: 0}).Do(request)
 	if err != nil {
@@ -63,20 +66,21 @@ func runFeed(ctx context.Context, args []string, getenv func(string) string, std
 	return renderFeedSSE(resp.Body, stdout, stderr)
 }
 
-func parseFeedFlags(args []string, stderr io.Writer) (bool, int) {
+func parseFeedFlags(args []string, stderr io.Writer) (bool, bool, int) {
 	flags := flag.NewFlagSet("feed", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	jsonOut := flags.Bool("json", false, "print one JSON object")
+	refresh := flags.Bool("refresh", false, "compose a new batch instead of using the cache")
 	_ = flags.Bool("quiet", false, "hide the footer")
 	_ = flags.Bool("no-color", false, "disable color")
 	if err := flags.Parse(args); err != nil {
-		return false, 2
+		return false, false, 2
 	}
 	if flags.NArg() > 0 {
 		_, _ = fmt.Fprintf(stderr, "ytfeed feed: unexpected argument %q\n", flags.Arg(0))
-		return false, 2
+		return false, false, 2
 	}
-	return *jsonOut, 0
+	return *jsonOut, *refresh, 0
 }
 
 func feedHTTPError(resp *http.Response, stderr io.Writer) int {

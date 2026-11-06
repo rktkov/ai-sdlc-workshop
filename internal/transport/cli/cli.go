@@ -308,6 +308,7 @@ func printHelp(w io.Writer) {
 	buf.WriteString("Usage:\n")
 	buf.WriteString("  ytfeed feed              Show today's cards\n")
 	buf.WriteString("  ytfeed feed --json       Print one JSON feed object\n")
+	buf.WriteString("  ytfeed feed --refresh    Compose a new batch instead of the cache\n")
 	buf.WriteString("  ytfeed stats             Show swipe, cold-period and quota stats\n")
 	buf.WriteString("  ytfeed rate --value -1|0|1  Record the weekly rating\n")
 	buf.WriteString("  ytfeed rate --dismiss    Record the week as unrated\n")

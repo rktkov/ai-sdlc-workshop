@@ -11,6 +11,19 @@ import (
 	"github.com/rktkov/ytfeed/internal/transport/contract"
 )
 
+type refreshKey struct{}
+
+// WithRefresh marks a request that must bypass the cached batch.
+func WithRefresh(ctx context.Context) context.Context {
+	return context.WithValue(ctx, refreshKey{}, true)
+}
+
+// RefreshRequested reports whether the cached batch must be bypassed.
+func RefreshRequested(ctx context.Context) bool {
+	value, _ := ctx.Value(refreshKey{}).(bool)
+	return value
+}
+
 // FeedProvider supplies the latest batch for one user.
 type FeedProvider interface {
 	Feed(ctx context.Context, userID string) (feed.Batch, error)
@@ -35,7 +48,7 @@ type LiveFeedProvider struct {
 
 // Feed returns the cached batch or composes one.
 func (p LiveFeedProvider) Feed(ctx context.Context, _ string) (feed.Batch, error) {
-	if p.Store != nil {
+	if p.Store != nil && !RefreshRequested(ctx) {
 		batch, err := p.Store.LatestCompleted(ctx, p.UserID)
 		if err == nil {
 			return batch, nil
@@ -76,7 +89,11 @@ func FeedHandler(provider FeedProvider) http.HandlerFunc {
 			http.Error(w, "feed provider is nil", http.StatusInternalServerError)
 			return
 		}
-		batch, err := provider.Feed(r.Context(), "owner")
+		ctx := r.Context()
+		if r.Header.Get("X-Ytfeed-Refresh") == "true" {
+			ctx = WithRefresh(ctx)
+		}
+		batch, err := provider.Feed(ctx, "owner")
 		switch {
 		case errors.Is(err, feed.ErrNoCachedFeed):
 			writeFeedError(w, http.StatusNotFound, "no_feed")
