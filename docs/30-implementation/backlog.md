@@ -155,7 +155,7 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-06 | Live composition | Closed and verified. `serve` composed batch `batch-1793961392159263000` with `FEED_SIZE=1`; the second request returned the cached batch. The card was `analysis_slow` because the LLM was unreachable. |
 | 2026-11-06 | Stats and rating UI | Closed. HTTP endpoints, `ytfeed stats`, `ytfeed rate` and the feed weekly hint are wired and verified live. |
 | 2026-11-06 | Trace call sites | Closed. Pipeline and HTTP spans are written; verified in `data/traces/2026-11-06.jsonl`. |
-| Open | Real model run | The analyzer is still tested against a fake OpenAI-compatible endpoint. |
+| 2026-11-06 | Real model run | Closed. `llama-server` b12110 with the 1.2B model produced an `analyzed` card (`blueberry-consumption-myths`, score `0.6875`). |
 | Open | `OQ-22` | The provisional `spike-s01` profile remains. |
 
 ## Progress

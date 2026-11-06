@@ -67,6 +67,8 @@ download or a live model call. Those need the owner at the browser and local bin
 4. **Trace wiring — closed 2026-11-06.** The pipeline records `feed.compose` and
    `feed.analyze`; the HTTP server records `http.request` with method, path and status.
    Verified live: `data/traces/2026-11-06.jsonl` contains a `GET /v1/stats` span.
-5. **Real model.** `T-035` is tested with an OpenAI-compatible fake. The S-01 spike
-   measured `llama-server`, but the product pipeline has not called it in a live run.
+5. **Real model — closed 2026-11-06.** `llama-server` b12110 served
+   `LFM2.5-1.2B-Instruct QAD Q4_0`. The live pipeline composed a card, called the model
+   and stored an `analyzed` result: topic `blueberry-consumption-myths`, score `0.6875`.
+   The previous cached card was cleared first so the model was actually called.
 6. **`OQ-22`.** The onboarding profile is still the provisional `spike-s01` profile.
