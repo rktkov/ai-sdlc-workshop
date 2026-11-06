@@ -187,3 +187,21 @@ func TestGestureUnhappy(t *testing.T) {
 		t.Fatal("bad gesture = nil, want an error")
 	}
 }
+
+func TestGestureFailedCardUsesPlaceholderTopic(t *testing.T) {
+	tasteRecorder := &fakeTaste{result: taste.Result{Applied: true}}
+	service := &GestureService{Sessions: &fakeSessionStore{}, Taste: tasteRecorder}
+	batch := gestureBatch()
+	batch.Cards[0].State = StateFailed
+	batch.Cards[0].Reason = "no_transcript"
+	batch.Cards[0].Topic = ""
+	session := gestureSession()
+	if _, err := service.Apply(context.Background(), session, &batch, GestureCommand{
+		GestureID: "g1", CardID: "c1", Gesture: GestureSave,
+	}); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if tasteRecorder.cmd.Topic != "unanalyzed" {
+		t.Fatalf("topic = %q", tasteRecorder.cmd.Topic)
+	}
+}

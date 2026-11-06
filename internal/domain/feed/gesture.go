@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rktkov/ytfeed/internal/domain/taste"
@@ -87,13 +88,17 @@ func (s *GestureService) Apply(ctx context.Context, session Session, batch *Batc
 		if len(scoredAxes) == 0 {
 			scoredAxes = card.ScoredAxes
 		}
+		topic := strings.TrimSpace(card.Topic)
+		if topic == "" {
+			topic = "unanalyzed"
+		}
 		result, err := s.Taste.Record(ctx, taste.Command{
 			GestureID:  cmd.GestureID,
 			UserID:     session.UserID,
 			CardID:     card.CardID,
 			VideoID:    card.VideoID,
 			ChannelID:  card.ChannelID,
-			Topic:      card.Topic,
+			Topic:      topic,
 			Gesture:    tasteGesture(cmd.Gesture),
 			Reason:     cmd.Reason,
 			ScoredAxes: scoredAxes,

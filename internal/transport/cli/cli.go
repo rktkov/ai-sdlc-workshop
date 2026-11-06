@@ -50,7 +50,7 @@ func RunWithInput(ctx context.Context, args []string, getenv func(string) string
 
 	switch args[0] {
 	case "feed":
-		return runFeed(ctx, args[1:], getenv, stdout, stderr, baseURL)
+		return runFeed(ctx, args[1:], getenv, stdin, stdout, stderr, baseURL)
 	case "stats":
 		return runStats(ctx, args[1:], getenv, stdout, stderr, baseURL)
 	case "rate":

@@ -52,7 +52,7 @@
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
-Definition of Done passes and the backlog is updated. The implementation backlog is complete. Post-E6: live consent, live feed composition and the stats/rating UI are closed; trace call sites, the real model run and `OQ-22` are closed. All post-E6 verification items are complete.
+Definition of Done passes and the backlog is updated. The implementation backlog is complete. Post-E6: live consent, live feed composition and the stats/rating UI are closed; trace call sites, the real model run and `OQ-22` are closed. All post-E6 verification items are complete. The interactive feed is available.
 
 ## Sprint 1
 

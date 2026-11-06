@@ -8,20 +8,23 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/rktkov/ytfeed/internal/config"
 	"github.com/rktkov/ytfeed/internal/domain/feed"
+	"github.com/rktkov/ytfeed/internal/domain/taste"
 	"github.com/rktkov/ytfeed/internal/transport/contract"
 	httpapi "github.com/rktkov/ytfeed/internal/transport/http"
 )
 
-func runFeed(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer, baseURL string) int {
-	jsonOut, refresh, code := parseFeedFlags(args, stderr)
+func runFeed(ctx context.Context, args []string, getenv func(string) string, stdin io.Reader, stdout, stderr io.Writer, baseURL string) int {
+	jsonOut, refresh, forceInteractive, code := parseFeedFlags(args, stderr)
 	if code != 0 {
 		return code
 	}
+	interactive := forceInteractive || (!jsonOut && isTerminal(stdin) && isTerminal(stdout))
 	cfg, err := config.Load(getenv)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
@@ -41,7 +44,7 @@ func runFeed(ctx context.Context, args []string, getenv func(string) string, std
 		return 1
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
-	if jsonOut {
+	if jsonOut || interactive {
 		request.Header.Set("Accept", "application/json")
 	} else {
 		request.Header.Set("Accept", "text/event-stream")
@@ -60,27 +63,43 @@ func runFeed(ctx context.Context, args []string, getenv func(string) string, std
 		return code
 	}
 	maybeRatingPrompt(ctx, token, baseURL, stderr)
+	if interactive {
+		return renderFeedInteractive(ctx, token, baseURL, resp.Body, stdin, stdout, stderr)
+	}
 	if jsonOut || strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
 		return renderFeedJSON(resp.Body, stdout, stderr)
 	}
 	return renderFeedSSE(resp.Body, stdout, stderr)
 }
 
-func parseFeedFlags(args []string, stderr io.Writer) (bool, bool, int) {
+func parseFeedFlags(args []string, stderr io.Writer) (bool, bool, bool, int) {
 	flags := flag.NewFlagSet("feed", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	jsonOut := flags.Bool("json", false, "print one JSON object")
 	refresh := flags.Bool("refresh", false, "compose a new batch instead of using the cache")
+	interactive := flags.Bool("interactive", false, "force interactive card mode")
 	_ = flags.Bool("quiet", false, "hide the footer")
 	_ = flags.Bool("no-color", false, "disable color")
 	if err := flags.Parse(args); err != nil {
-		return false, false, 2
+		return false, false, false, 2
 	}
 	if flags.NArg() > 0 {
 		_, _ = fmt.Fprintf(stderr, "ytfeed feed: unexpected argument %q\n", flags.Arg(0))
-		return false, false, 2
+		return false, false, false, 2
 	}
-	return *jsonOut, *refresh, 0
+	return *jsonOut, *refresh, *interactive, 0
+}
+
+func isTerminal(value any) bool {
+	file, ok := value.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }
 
 func feedHTTPError(resp *http.Response, stderr io.Writer) int {
@@ -115,6 +134,14 @@ func feedHTTPError(resp *http.Response, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintf(stderr, "ytfeed feed: server returned %d\n", resp.StatusCode)
 	return 1
+}
+
+func scoredAxes(values []contract.AxisScore) []taste.AxisScore {
+	out := make([]taste.AxisScore, 0, len(values))
+	for _, value := range values {
+		out = append(out, taste.AxisScore{Axis: value.Axis, Score: value.Score})
+	}
+	return out
 }
 
 func renderFeedJSON(body io.Reader, stdout, stderr io.Writer) int {
@@ -196,5 +223,6 @@ func cardFromWire(wire contract.FeedCard) (feed.Card, error) {
 		State: feed.State(wire.State), Reason: wire.Reason,
 		AnalysisID: wire.AnalysisID, Score: wire.Score, Position: wire.Position,
 		Decision: feed.CardDecision(wire.Decision), AnalyzedLate: wire.AnalyzedLate,
+		ScoredAxes: scoredAxes(wire.ScoredAxes),
 	}, nil
 }

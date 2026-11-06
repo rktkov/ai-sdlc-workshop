@@ -157,6 +157,7 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-06 | Trace call sites | Closed. Pipeline and HTTP spans are written; verified in `data/traces/2026-11-06.jsonl`. |
 | 2026-11-06 | Real model run | Closed. `llama-server` b12110 with the 1.2B model produced an `analyzed` card (`blueberry-consumption-myths`, score `0.6875`). |
 | 2026-11-06 | `OQ-22` | Closed. The four S-01 axes are rubric v1 at weight 0.5; migration 0012 updates profiles. |
+| 2026-11-06 | Interactive feed | Closed. TTY card mode with h/l/s/j/k/o/q, the reason picker and live gestures. `--interactive` forces line mode; `--json` stays one-shot. |
 
 ## Progress
 
