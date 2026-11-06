@@ -288,3 +288,58 @@ func TestReadInteractiveKeyEmptyLine(t *testing.T) {
 		t.Fatal("strings.Reader reported as a terminal")
 	}
 }
+
+func TestInteractiveRefresh(t *testing.T) {
+	refreshed := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/feed":
+			if r.Header.Get("X-Ytfeed-Refresh") == "true" {
+				refreshed = true
+				_, _ = fmt.Fprint(w, `{"batch_id":"b2","state":"completed","cards":[{"card_id":"c9","video_id":"v9","channel_id":"ch9","title":"Refreshed card","channel":"Channel","state":"failed","reason":"no_transcript","position":0}]}`)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(interactiveFeed())
+		case "/v1/rating":
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	var out, errOut bytes.Buffer
+	if code := RunWithInput(context.Background(), []string{"feed", "--interactive"}, feedTestEnv(t), strings.NewReader("r\nq\n"), &out, &errOut, server.URL); code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if !refreshed {
+		t.Fatal("refresh header was not sent")
+	}
+	if !strings.Contains(out.String(), "Refreshed card") {
+		t.Fatalf("stdout = %q", out.String())
+	}
+}
+
+func TestInteractiveRefreshError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/feed":
+			if r.Header.Get("X-Ytfeed-Refresh") == "true" {
+				http.Error(w, "boom", http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(interactiveFeed())
+		case "/v1/rating":
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	var out, errOut bytes.Buffer
+	if code := RunWithInput(context.Background(), []string{"feed", "--interactive"}, feedTestEnv(t), strings.NewReader("r\nq\n"), &out, &errOut, server.URL); code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if !strings.Contains(errOut.String(), "refresh failed") {
+		t.Fatalf("stderr = %q", errOut.String())
+	}
+}

@@ -39,10 +39,28 @@ func renderFeedInteractive(ctx context.Context, token, baseURL string, body io.R
 	picker := &ReasonPicker{}
 	index := 0
 	for {
+		if len(payload.Cards) == 0 {
+			_, _ = fmt.Fprintln(stdout, "no cards; press r to refresh or q to quit")
+			key, err := readInteractiveKey(reader, raw, stdout)
+			if err != nil && key == "" {
+				return 0
+			}
+			if strings.EqualFold(key, "q") || strings.EqualFold(key, "esc") {
+				return 0
+			}
+			if strings.EqualFold(key, "r") || strings.EqualFold(key, "refresh") {
+				payload, index = refreshInteractiveFeed(ctx, token, baseURL, stdout, stderr, payload)
+			}
+			continue
+		}
 		renderInteractiveCard(stdout, payload.Cards[index], index, len(payload.Cards), raw)
 		key, err := readInteractiveKey(reader, raw, stdout)
 		if err != nil && key == "" {
 			return 0
+		}
+		if strings.EqualFold(key, "r") || strings.EqualFold(key, "refresh") {
+			payload, index = refreshInteractiveFeed(ctx, token, baseURL, stdout, stderr, payload)
+			continue
 		}
 		next, quit := handleInteractiveKey(ctx, token, baseURL, &payload.Cards, index, key, reader, raw, stdout, stderr, picker)
 		if quit {
@@ -50,6 +68,45 @@ func renderFeedInteractive(ctx context.Context, token, baseURL string, body io.R
 		}
 		index = next
 	}
+}
+
+func refreshInteractiveFeed(ctx context.Context, token, baseURL string, stdout, stderr io.Writer, current contract.Feed) (contract.Feed, int) {
+	_, _ = fmt.Fprintln(stdout, "composing a new batch...")
+	value, err := fetchInteractiveFeed(ctx, token, baseURL)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "ytfeed feed: refresh failed: %v\n", err)
+		return current, 0
+	}
+	return value, 0
+}
+
+func fetchInteractiveFeed(ctx context.Context, token, baseURL string) (contract.Feed, error) {
+	if baseURL == "" {
+		baseURL = defaultBaseURL
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1/feed", nil)
+	if err != nil {
+		return contract.Feed{}, err
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("X-Ytfeed-Refresh", "true")
+	resp, err := (&http.Client{Timeout: 0}).Do(request)
+	if err != nil {
+		return contract.Feed{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return contract.Feed{}, fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+	var payload contract.Feed
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return contract.Feed{}, err
+	}
+	if err := payload.Validate(); err != nil {
+		return contract.Feed{}, err
+	}
+	return payload, nil
 }
 
 func handleInteractiveKey(ctx context.Context, token, baseURL string, cards *[]contract.FeedCard, index int, key string, reader *bufio.Reader, raw bool, stdout, stderr io.Writer, picker *ReasonPicker) (int, bool) {
@@ -119,7 +176,7 @@ func renderInteractiveCard(w io.Writer, card contract.FeedCard, index, total int
 	_ = RenderCard(w, value)
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "[←/h] reject  [→/l] accept  [s] save  [j] down  [k] up")
-	_, _ = fmt.Fprintln(w, "[o] open      [?] help     [q] quit")
+	_, _ = fmt.Fprintln(w, "[o] open      [r] refresh  [?] help     [q] quit")
 }
 
 func readInteractiveKey(reader *bufio.Reader, raw bool, stdout io.Writer) (string, error) {
@@ -244,6 +301,7 @@ func printInteractiveHelp(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "j / ↓   next card")
 	_, _ = fmt.Fprintln(w, "k / ↑   previous card")
 	_, _ = fmt.Fprintln(w, "o       open the video in the browser")
+	_, _ = fmt.Fprintln(w, "r       compose a new batch")
 	_, _ = fmt.Fprintln(w, "q / Esc quit")
 	_, _ = fmt.Fprintln(w, "\nPress any key to return.")
 }
