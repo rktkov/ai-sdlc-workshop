@@ -172,11 +172,16 @@ func sourcePriority(source CandidateSource) int {
 	switch source {
 	case SourceGraph:
 		return 0
-	case SourceSearch:
-		return 1
 	case SourceTrending:
+		return 1
+	case SourceSearch:
 		return 2
 	default:
 		return 3
 	}
+}
+
+// SourceRank orders sources by selection priority. Lower is better.
+func SourceRank(source CandidateSource) int {
+	return sourcePriority(source)
 }

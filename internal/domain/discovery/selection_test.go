@@ -184,7 +184,7 @@ func TestSelectSourcePriority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Select: %v", err)
 	}
-	want := []string{"graph", "search", "trending"}
+	want := []string{"graph", "trending", "search"}
 	for i, selected := range selection.Selected {
 		if selected.VideoID != want[i] {
 			t.Fatalf("selected %d = %q, want %q", i, selected.VideoID, want[i])

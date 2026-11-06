@@ -29,8 +29,10 @@ type AppConfig struct {
 
 // FeedConfig controls feed composition.
 type FeedConfig struct {
-	Size          int
-	RefreshSource string // FEED_REFRESH_SOURCE, default mixed
+	Size              int
+	RefreshSource     string // FEED_REFRESH_SOURCE, default mixed
+	GraphChannelLimit int    // FEED_GRAPH_CHANNEL_LIMIT, default 20
+	GraphRelatedLimit int    // FEED_GRAPH_RELATED_LIMIT, default 10
 }
 
 // YouTubeConfig controls the optional Google integrations.
@@ -95,8 +97,10 @@ func defaultConfig(getenv func(string) string) Config {
 			LogLevel: valueOr(getenv, "LOG_LEVEL", "info"),
 		},
 		Feed: FeedConfig{
-			Size:          20,
-			RefreshSource: valueOr(getenv, "FEED_REFRESH_SOURCE", "mixed"),
+			Size:              20,
+			RefreshSource:     valueOr(getenv, "FEED_REFRESH_SOURCE", "mixed"),
+			GraphChannelLimit: 20,
+			GraphRelatedLimit: 10,
 		},
 		YouTube: YouTubeConfig{
 			OAuthClientFile: strings.TrimSpace(getenv("GOOGLE_OAUTH_CLIENT_FILE")),
@@ -144,6 +148,22 @@ func parseFeed(getenv func(string) string, cfg *Config) []string {
 			problems = append(problems, "FEED_SIZE must be an integer between 1 and 20")
 		} else {
 			cfg.Feed.Size = size
+		}
+	}
+	if raw := strings.TrimSpace(getenv("FEED_GRAPH_CHANNEL_LIMIT")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > 50 {
+			problems = append(problems, "FEED_GRAPH_CHANNEL_LIMIT must be an integer between 1 and 50")
+		} else {
+			cfg.Feed.GraphChannelLimit = value
+		}
+	}
+	if raw := strings.TrimSpace(getenv("FEED_GRAPH_RELATED_LIMIT")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 0 || value > 50 {
+			problems = append(problems, "FEED_GRAPH_RELATED_LIMIT must be an integer between 0 and 50")
+		} else {
+			cfg.Feed.GraphRelatedLimit = value
 		}
 	}
 	return problems
@@ -227,6 +247,8 @@ func (c Config) Redacted() map[string]string {
 		"log_level":                 c.App.LogLevel,
 		"feed_size":                 strconv.Itoa(c.Feed.Size),
 		"feed_refresh_source":       c.Feed.RefreshSource,
+		"feed_graph_channel_limit":  strconv.Itoa(c.Feed.GraphChannelLimit),
+		"feed_graph_related_limit":  strconv.Itoa(c.Feed.GraphRelatedLimit),
 		"llm_base_url":              c.LLM.BaseURL,
 		"llm_model":                 c.LLM.Model,
 		"llm_api_key":               key,

@@ -279,7 +279,7 @@ The owner confirmed all six decisions on 2026-11-06:
 |------|--------|-------|
 | `T-060` | DONE | Source model, `FEED_REFRESH_SOURCE`, HTTP header, CLI flag, interactive picker. |
 | `T-061` | DONE | `SearchPage`, `PlaylistItems`, uploads playlist metadata and the `playlist_items` quota call. |
-| `T-062` | TODO | Trending and graph sources in the pipeline. |
+| `T-062` | DONE | Trending and graph sources in the pipeline. Graph reads subscription uploads and related channels. |
 | `T-063` | DONE | `shown_videos`, 90-day pruning, full exclusion, mark on save. |
 | `T-064` | TODO | Per-channel cap, candidate expansion, 20-unseen shortfall. |
 | `T-065` | TODO | Progressive pending cards and analysis updates. |

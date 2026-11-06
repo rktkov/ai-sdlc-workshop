@@ -34,13 +34,18 @@ func (f *fakePlanner) record(value string) {
 }
 
 type fakeYouTube struct {
-	videos    []discovery.Video
-	metas     map[string]identity.Subscription
-	err       error
-	videosErr error
-	chErr     error
-	calls     *[]string
-	searchN   int
+	videos      []discovery.Video
+	trending    []discovery.Video
+	trendingErr error
+	metas       map[string]identity.Subscription
+	playlists   map[string]discovery.VideoPage
+	playlistErr map[string]error
+	playlistIDs []string
+	err         error
+	videosErr   error
+	chErr       error
+	calls       *[]string
+	searchN     int
 }
 
 func (f *fakeYouTube) Search(context.Context, string, discovery.Query) ([]discovery.Video, error) {
@@ -55,9 +60,13 @@ func (f *fakeYouTube) SearchPage(context.Context, string, discovery.Query, strin
 	return discovery.VideoPage{Videos: f.videos}, f.err
 }
 
-func (f *fakeYouTube) PlaylistItems(context.Context, string, string, string) (discovery.VideoPage, error) {
+func (f *fakeYouTube) PlaylistItems(_ context.Context, _ string, playlistID, _ string) (discovery.VideoPage, error) {
 	f.record("playlist_items")
-	return discovery.VideoPage{}, nil
+	f.playlistIDs = append(f.playlistIDs, playlistID)
+	if err := f.playlistErr[playlistID]; err != nil {
+		return discovery.VideoPage{}, err
+	}
+	return f.playlists[playlistID], nil
 }
 
 func (f *fakeYouTube) Channels(context.Context, string, []string) (map[string]identity.Subscription, error) {
@@ -78,7 +87,8 @@ func (f *fakeYouTube) SubscriptionPage(context.Context, string, string) (identit
 }
 
 func (f *fakeYouTube) MostPopular(context.Context, string, string) ([]discovery.Video, error) {
-	return nil, nil
+	f.record("most_popular")
+	return f.trending, f.trendingErr
 }
 
 func (f *fakeYouTube) record(value string) {
@@ -305,8 +315,8 @@ func TestPipelineHappy(t *testing.T) {
 	if len(calls) == 0 {
 		t.Fatal("no stages recorded")
 	}
-	// The stages must run in order.
-	order := []string{"plan", "reserve", "search", "videos", "channels", "fetch", "stage", "analyze", "save", "delete"}
+	// The stages must run in order. Graph channel reads come before enrichment.
+	order := []string{"plan", "reserve", "search", "channels", "videos", "fetch", "stage", "analyze", "save", "delete"}
 	position := map[string]int{}
 	for i, call := range calls {
 		if _, ok := position[call]; !ok {
@@ -645,5 +655,167 @@ func TestPipelineProgress(t *testing.T) {
 		if !found {
 			t.Fatalf("missing stage %q in %v", stage, stages)
 		}
+	}
+}
+
+func TestPipelineSources(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   discovery.RefreshSource
+		search   bool
+		trending bool
+		graph    bool
+	}{
+		{name: "keywords", source: discovery.RefreshKeywords, search: true},
+		{name: "trending", source: discovery.RefreshTrending, search: true, trending: true},
+		{name: "graph", source: discovery.RefreshGraph, search: true, graph: true},
+		{name: "fresh", source: discovery.RefreshFresh, trending: true, graph: true},
+		{name: "mixed", source: discovery.RefreshMixed, search: true, trending: true, graph: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls []string
+			pipeline := testPipeline(&calls)
+			pipeline.Source = tt.source
+			pipeline.Subscriptions = []identity.Subscription{{ChannelID: "sub1", SubscriberCount: 500000}}
+			fake := pipeline.YouTube.(*fakeYouTube)
+			fake.metas["sub1"] = identity.Subscription{ChannelID: "sub1", UploadsPlaylistID: "p-sub"}
+			fake.playlists = map[string]discovery.VideoPage{
+				"p-sub": {Videos: []discovery.Video{{VideoID: "g1", ChannelID: "sub1"}}},
+			}
+			fake.trending = []discovery.Video{{VideoID: "t1", ChannelID: "c2"}}
+			result, err := pipeline.Run(context.Background())
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if len(result.Selection.Selected) == 0 && tt.source != discovery.RefreshFresh {
+				t.Fatalf("no selected cards for %s", tt.name)
+			}
+			if hasCall(calls, "search") != tt.search {
+				t.Fatalf("search = %t, calls = %v", hasCall(calls, "search"), calls)
+			}
+			if hasCall(calls, "most_popular") != tt.trending {
+				t.Fatalf("most_popular = %t, calls = %v", hasCall(calls, "most_popular"), calls)
+			}
+			if hasCall(calls, "playlist_items") != tt.graph {
+				t.Fatalf("playlist_items = %t, calls = %v", hasCall(calls, "playlist_items"), calls)
+			}
+			if tt.search && !hasCall(calls, "plan") {
+				t.Fatalf("search source did not plan: %v", calls)
+			}
+			if !tt.search && hasCall(calls, "plan") {
+				t.Fatalf("non-search source planned: %v", calls)
+			}
+		})
+	}
+}
+
+func TestPipelineGraphSourcePriority(t *testing.T) {
+	var calls []string
+	pipeline := testPipeline(&calls)
+	pipeline.Source = discovery.RefreshMixed
+	pipeline.Size = 5
+	pipeline.Subscriptions = []identity.Subscription{{ChannelID: "sub1", SubscriberCount: 500000}}
+	fake := pipeline.YouTube.(*fakeYouTube)
+	fake.metas["sub1"] = identity.Subscription{ChannelID: "sub1", UploadsPlaylistID: "p-sub"}
+	fake.playlists = map[string]discovery.VideoPage{
+		"p-sub": {Videos: []discovery.Video{
+			{VideoID: "g1", ChannelID: "sub1"},
+			{VideoID: "v1", ChannelID: "c1"},
+		}},
+	}
+	fake.trending = []discovery.Video{{VideoID: "t1", ChannelID: "c2"}}
+	result, err := pipeline.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(result.Selection.Selected) != 5 {
+		t.Fatalf("selected = %d", len(result.Selection.Selected))
+	}
+	first := result.Selection.Selected[0]
+	if first.Source != discovery.SourceGraph {
+		t.Fatalf("first source = %q, want graph", first.Source)
+	}
+	for _, value := range result.Selection.Selected {
+		if value.VideoID == "v1" && value.Source != discovery.SourceGraph {
+			t.Fatalf("duplicate v1 source = %q, want graph", value.Source)
+		}
+	}
+}
+
+func TestPipelineGraphSkipsPrivateUploads(t *testing.T) {
+	var calls []string
+	pipeline := testPipeline(&calls)
+	pipeline.Source = discovery.RefreshGraph
+	pipeline.Subscriptions = []identity.Subscription{{ChannelID: "sub1", SubscriberCount: 500000}}
+	fake := pipeline.YouTube.(*fakeYouTube)
+	fake.metas["sub1"] = identity.Subscription{ChannelID: "sub1", UploadsPlaylistID: "p-private"}
+	fake.playlistErr = map[string]error{"p-private": errors.New("private uploads")}
+	result, err := pipeline.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(result.Selection.Selected) != 3 {
+		t.Fatalf("selected = %d, want 3", len(result.Selection.Selected))
+	}
+}
+
+func TestPipelineGraphChannelLimit(t *testing.T) {
+	var calls []string
+	pipeline := testPipeline(&calls)
+	pipeline.Source = discovery.RefreshGraph
+	pipeline.GraphChannelLimit = 1
+	pipeline.Subscriptions = []identity.Subscription{
+		{ChannelID: "sub1", SubscriberCount: 100},
+		{ChannelID: "sub2", SubscriberCount: 500},
+	}
+	fake := pipeline.YouTube.(*fakeYouTube)
+	fake.metas["sub1"] = identity.Subscription{ChannelID: "sub1", UploadsPlaylistID: "p1"}
+	fake.metas["sub2"] = identity.Subscription{ChannelID: "sub2", UploadsPlaylistID: "p2"}
+	fake.playlists = map[string]discovery.VideoPage{
+		"p1": {Videos: []discovery.Video{{VideoID: "g1", ChannelID: "sub1"}}},
+		"p2": {Videos: []discovery.Video{{VideoID: "g2", ChannelID: "sub2"}}},
+	}
+	if _, err := pipeline.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(fake.playlistIDs) == 0 || fake.playlistIDs[0] != "p2" {
+		t.Fatalf("playlist ids = %v, want p2 first", fake.playlistIDs)
+	}
+}
+
+func TestDedupeVideosPrefersGraph(t *testing.T) {
+	videos := []discovery.Video{
+		{VideoID: "v1", Source: discovery.SourceSearch},
+		{VideoID: "v1", Source: discovery.SourceGraph},
+	}
+	got := dedupeVideos(videos)
+	if len(got) != 1 || got[0].Source != discovery.SourceGraph {
+		t.Fatalf("videos = %+v", got)
+	}
+}
+
+func hasCall(calls []string, want string) bool {
+	for _, call := range calls {
+		if call == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestPipelineTrendingPriority(t *testing.T) {
+	var calls []string
+	pipeline := testPipeline(&calls)
+	pipeline.Source = discovery.RefreshTrending
+	fake := pipeline.YouTube.(*fakeYouTube)
+	fake.trending = []discovery.Video{{VideoID: "t1", ChannelID: "c9"}}
+	fake.metas["c9"] = identity.Subscription{ChannelID: "c9", SubscriberCount: 1000}
+	result, err := pipeline.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(result.Selection.Selected) == 0 || result.Selection.Selected[0].VideoID != "t1" {
+		t.Fatalf("selected = %+v", result.Selection.Selected)
 	}
 }

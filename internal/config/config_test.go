@@ -20,6 +20,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Feed.Size != 20 || cfg.Feed.RefreshSource != "mixed" {
 		t.Fatalf("Feed = %+v", cfg.Feed)
 	}
+	if cfg.Feed.GraphChannelLimit != 20 || cfg.Feed.GraphRelatedLimit != 10 {
+		t.Fatalf("Feed graph limits = %+v", cfg.Feed)
+	}
 	if cfg.LLM.BaseURL != "http://localhost:11434/v1" {
 		t.Fatalf("LLM.BaseURL = %q", cfg.LLM.BaseURL)
 	}
@@ -43,6 +46,8 @@ func TestLoadOverrides(t *testing.T) {
 		"LOG_LEVEL":                "debug",
 		"FEED_SIZE":                "12",
 		"FEED_REFRESH_SOURCE":      "trending",
+		"FEED_GRAPH_CHANNEL_LIMIT": "5",
+		"FEED_GRAPH_RELATED_LIMIT": "3",
 		"LLM_BASE_URL":             "http://127.0.0.1:8080/v1",
 		"LLM_MODEL":                "test-model",
 		"LLM_API_KEY":              "secret",
@@ -60,7 +65,7 @@ func TestLoadOverrides(t *testing.T) {
 	if cfg.App.LogEnv != "production" || cfg.App.LogLevel != "debug" {
 		t.Fatalf("App = %+v", cfg.App)
 	}
-	if cfg.Feed.Size != 12 || cfg.Feed.RefreshSource != "trending" {
+	if cfg.Feed.Size != 12 || cfg.Feed.RefreshSource != "trending" || cfg.Feed.GraphChannelLimit != 5 || cfg.Feed.GraphRelatedLimit != 3 {
 		t.Fatalf("Feed = %+v", cfg.Feed)
 	}
 	if cfg.LLM.JSONMode {
@@ -76,12 +81,14 @@ func TestLoadOverrides(t *testing.T) {
 
 func TestLoadRejectsInvalidConfig(t *testing.T) {
 	env := map[string]string{
-		"LOG_ENV":             "staging",
-		"LOG_LEVEL":           "trace",
-		"FEED_SIZE":           "0",
-		"FEED_REFRESH_SOURCE": "random",
-		"LLM_BASE_URL":        "ftp://example.com",
-		"LLM_JSON_MODE":       "maybe",
+		"LOG_ENV":                  "staging",
+		"LOG_LEVEL":                "trace",
+		"FEED_SIZE":                "0",
+		"FEED_REFRESH_SOURCE":      "random",
+		"FEED_GRAPH_CHANNEL_LIMIT": "0",
+		"FEED_GRAPH_RELATED_LIMIT": "-1",
+		"LLM_BASE_URL":             "ftp://example.com",
+		"LLM_JSON_MODE":            "maybe",
 	}
 
 	_, err := Load(func(key string) string { return env[key] })
@@ -89,7 +96,7 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 		t.Fatal("Load() = nil, want an error")
 	}
 
-	for _, want := range []string{"LOG_ENV", "LOG_LEVEL", "FEED_SIZE", "FEED_REFRESH_SOURCE", "LLM_BASE_URL", "LLM_JSON_MODE"} {
+	for _, want := range []string{"LOG_ENV", "LOG_LEVEL", "FEED_SIZE", "FEED_REFRESH_SOURCE", "FEED_GRAPH_CHANNEL_LIMIT", "FEED_GRAPH_RELATED_LIMIT", "LLM_BASE_URL", "LLM_JSON_MODE"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error %q does not mention %s", err, want)
 		}

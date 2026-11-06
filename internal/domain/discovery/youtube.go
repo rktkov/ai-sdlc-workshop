@@ -18,6 +18,7 @@ type Video struct {
 	SubscriberCount int64
 	Duration        string
 	TopicTags       []string
+	Source          CandidateSource
 }
 
 // VideoPage is one page of search or upload results.

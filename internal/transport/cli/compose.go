@@ -54,7 +54,7 @@ type pipelineRunner interface {
 	Run(ctx context.Context) (feed.Result, error)
 }
 
-type pipelineFactory func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, source discovery.RefreshSource, progress feed.ProgressFunc) pipelineRunner
+type pipelineFactory func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, source discovery.RefreshSource, subscriptions []identity.Subscription, progress feed.ProgressFunc) pipelineRunner
 
 type liveComposer struct {
 	UserID     string
@@ -113,14 +113,15 @@ func (c *liveComposer) ComposeWithProgress(ctx context.Context, userID string, p
 		}
 		return feed.Batch{}, err
 	}
-	exclusions := discovery.ExclusionSet{}
-	if c.Exclusions != nil {
-		exclusions, err = c.Exclusions.ForUser(ctx, userID, now.AddDate(0, 0, -90))
-		if err != nil {
-			return feed.Batch{}, err
-		}
+	exclusions, err := c.loadExclusions(ctx, userID, now)
+	if err != nil {
+		return feed.Batch{}, err
 	}
-	runner := c.Factory(profile, interests, token, exclusions, source, progress)
+	subscriptions, err := c.loadSubscriptions(ctx, userID, source, progress)
+	if err != nil {
+		return feed.Batch{}, err
+	}
+	runner := c.Factory(profile, interests, token, exclusions, source, subscriptions, progress)
 	if runner == nil {
 		return feed.Batch{}, errors.New("pipeline factory returned nil")
 	}
@@ -145,6 +146,25 @@ func (c *liveComposer) ComposeWithProgress(ctx context.Context, userID string, p
 	}
 	c.report(progress, "done", "batch ready", nil)
 	return batch, nil
+}
+
+func (c *liveComposer) loadExclusions(ctx context.Context, userID string, now time.Time) (discovery.ExclusionSet, error) {
+	if c.Exclusions == nil {
+		return discovery.ExclusionSet{}, nil
+	}
+	return c.Exclusions.ForUser(ctx, userID, now.AddDate(0, 0, -90))
+}
+
+func (c *liveComposer) loadSubscriptions(ctx context.Context, userID string, source discovery.RefreshSource, progress feed.ProgressFunc) ([]identity.Subscription, error) {
+	if !source.UsesGraph() || c.Channels == nil {
+		return nil, nil
+	}
+	subscriptions, err := c.Channels.List(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	c.report(progress, "subscriptions", fmt.Sprintf("loaded %d subscriptions for the graph", len(subscriptions)), nil)
+	return subscriptions, nil
 }
 
 func (c *liveComposer) report(progress feed.ProgressFunc, stage, message string, attributes map[string]any) {
@@ -202,7 +222,7 @@ func newLiveComposer(cfg config.Config, db *sql.DB) *liveComposer {
 	profiles := sqlite.NewProfileRepository(db)
 	tasteService := &taste.Service{Profiles: profiles}
 	dataDir := cfg.Storage.DataDir
-	factory := func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, source discovery.RefreshSource, progress feed.ProgressFunc) pipelineRunner {
+	factory := func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, source discovery.RefreshSource, subscriptions []identity.Subscription, progress feed.ProgressFunc) pipelineRunner {
 		youtubeSource := youtube.NewSource("", nil)
 		youtubeSource.Region = cfg.YouTube.Region
 		quota := &discovery.QuotaService{Store: sqlite.NewQuotaRepository(db)}
@@ -214,6 +234,7 @@ func newLiveComposer(cfg config.Config, db *sql.DB) *liveComposer {
 			UserID: "owner", AccessToken: token.AccessToken, Interests: interests,
 			Size: cfg.Feed.Size, MicroTarget: 0.2, RubricVersion: profile.RubricVersion,
 			ModelID: cfg.LLM.Model, Staging: cfg.Analysis.Staging, Source: source, Exclusions: exclusions,
+			Subscriptions: subscriptions, GraphChannelLimit: cfg.Feed.GraphChannelLimit, GraphRelatedLimit: cfg.Feed.GraphRelatedLimit,
 			Planner: discovery.QueryPlanner{}, YouTube: youtubeSource, Quota: quota,
 			Fetcher: fetcher, Transcripts: staging, Analyzer: analyzer,
 			Analyses: sqlite.NewAnalysisRepository(db),

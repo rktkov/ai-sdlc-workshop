@@ -40,17 +40,20 @@ type ProgressFunc func(stage, message string, attributes map[string]any)
 
 // Pipeline runs discovery, selection and analysis in order.
 type Pipeline struct {
-	UserID        string
-	AccessToken   string
-	Interests     []string
-	Size          int
-	MicroTarget   float64
-	RubricVersion string
-	ModelID       string
-	BatchID       string
-	Staging       bool
-	Source        discovery.RefreshSource
-	Exclusions    discovery.ExclusionSet
+	UserID            string
+	AccessToken       string
+	Interests         []string
+	Size              int
+	MicroTarget       float64
+	RubricVersion     string
+	ModelID           string
+	BatchID           string
+	Staging           bool
+	Source            discovery.RefreshSource
+	Exclusions        discovery.ExclusionSet
+	Subscriptions     []identity.Subscription
+	GraphChannelLimit int
+	GraphRelatedLimit int
 
 	Planner     Planner
 	YouTube     discovery.YouTube
@@ -88,12 +91,17 @@ func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
 		source = discovery.RefreshMixed
 	}
 	p.report("source", "refresh source: "+string(source), nil)
-	p.report("plan", fmt.Sprintf("planning %d queries", len(p.Interests)), nil)
-	queries, err := p.Planner.Plan(p.Interests)
-	if err != nil {
-		return Result{}, fmt.Errorf("plan queries: %w", err)
+	var queries []discovery.Query
+	if source.UsesSearch() {
+		p.report("plan", fmt.Sprintf("planning %d queries", len(p.Interests)), nil)
+		queries, err = p.Planner.Plan(p.Interests)
+		if err != nil {
+			return Result{}, fmt.Errorf("plan queries: %w", err)
+		}
+	} else {
+		p.report("plan", "keyword search is off for this source", nil)
 	}
-	videos, shortfall, err := p.discover(ctx, queries)
+	videos, shortfall, err := p.discover(ctx, queries, source)
 	if err != nil {
 		return Result{}, err
 	}
@@ -103,13 +111,17 @@ func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
 
 	candidates := make([]discovery.Candidate, 0, len(videos))
 	for position, video := range videos {
+		candidateSource := video.Source
+		if candidateSource == "" {
+			candidateSource = discovery.SourceSearch
+		}
 		candidates = append(candidates, discovery.Candidate{
 			VideoID:         video.VideoID,
 			ChannelID:       video.ChannelID,
 			Title:           video.Title,
 			SubscriberCount: video.SubscriberCount,
 			TopicTags:       video.TopicTags,
-			Source:          discovery.SourceSearch,
+			Source:          candidateSource,
 			DiscoveryRank:   position,
 		})
 	}
@@ -155,29 +167,30 @@ func (p *Pipeline) validate() error {
 	return nil
 }
 
-func (p *Pipeline) discover(ctx context.Context, queries []discovery.Query) ([]discovery.Video, string, error) {
+func (p *Pipeline) discover(ctx context.Context, queries []discovery.Query, source discovery.RefreshSource) ([]discovery.Video, string, error) {
 	var videos []discovery.Video
-	for index, query := range queries {
-		p.report("search", "searching: "+query.Text, map[string]any{"current": index + 1, "total": len(queries)})
-		reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallSearch)
-		if errors.Is(err, discovery.ErrQuotaExhausted) {
-			return videos, "quota", nil
-		}
+	if source.UsesSearch() {
+		found, shortfall, err := p.search(ctx, queries)
 		if err != nil {
-			return nil, "", fmt.Errorf("reserve search quota: %w", err)
-		}
-		found, err := p.YouTube.Search(ctx, p.AccessToken, query)
-		if err != nil {
-			_ = p.charge(ctx, reservation.ID)
-			if errors.Is(err, identity.ErrUnauthorized) {
-				return nil, "", err
-			}
-			return videos, "quota", nil
-		}
-		if err := p.charge(ctx, reservation.ID); err != nil {
 			return nil, "", err
 		}
-		p.report("search_done", fmt.Sprintf("found %d results for %s", len(found), query.Text), map[string]any{"current": index + 1, "total": len(queries)})
+		if shortfall == "quota" {
+			return found, "quota", nil
+		}
+		videos = append(videos, found...)
+	}
+	if source.UsesTrending() {
+		found, err := p.trending(ctx)
+		if err != nil {
+			return nil, "", err
+		}
+		videos = append(videos, found...)
+	}
+	if source.UsesGraph() {
+		found, err := p.graph(ctx, videos)
+		if err != nil {
+			return nil, "", err
+		}
 		videos = append(videos, found...)
 	}
 	if len(videos) == 0 {
@@ -189,6 +202,133 @@ func (p *Pipeline) discover(ctx context.Context, queries []discovery.Query) ([]d
 		return nil, "", err
 	}
 	return enriched, shortfall, nil
+}
+
+func (p *Pipeline) search(ctx context.Context, queries []discovery.Query) ([]discovery.Video, string, error) {
+	var videos []discovery.Video
+	for index, query := range queries {
+		p.report("search", "searching: "+query.Text, map[string]any{"current": index + 1, "total": len(queries)})
+		reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallSearch)
+		if errors.Is(err, discovery.ErrQuotaExhausted) {
+			return videos, "quota", nil
+		}
+		if err != nil {
+			return nil, "", fmt.Errorf("reserve search quota: %w", err)
+		}
+		page, err := p.YouTube.SearchPage(ctx, p.AccessToken, query, "")
+		if err != nil {
+			_ = p.charge(ctx, reservation.ID)
+			if errors.Is(err, identity.ErrUnauthorized) {
+				return nil, "", err
+			}
+			return videos, "quota", nil
+		}
+		if err := p.charge(ctx, reservation.ID); err != nil {
+			return nil, "", err
+		}
+		p.report("search_done", fmt.Sprintf("found %d results for %s", len(page.Videos), query.Text), map[string]any{"current": index + 1, "total": len(queries)})
+		for i := range page.Videos {
+			page.Videos[i].Source = discovery.SourceSearch
+		}
+		videos = append(videos, page.Videos...)
+	}
+	return videos, "", nil
+}
+
+func (p *Pipeline) trending(ctx context.Context) ([]discovery.Video, error) {
+	p.report("trending", "loading trending videos", nil)
+	reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallMostPopular)
+	if errors.Is(err, discovery.ErrQuotaExhausted) {
+		p.report("trending_skip", "quota exhausted before trending", nil)
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reserve trending quota: %w", err)
+	}
+	videos, err := p.YouTube.MostPopular(ctx, p.AccessToken, "")
+	if err != nil {
+		_ = p.charge(ctx, reservation.ID)
+		if errors.Is(err, identity.ErrUnauthorized) {
+			return nil, err
+		}
+		p.report("trending_skip", "trending unavailable", nil)
+		return nil, nil
+	}
+	if err := p.charge(ctx, reservation.ID); err != nil {
+		return nil, err
+	}
+	for i := range videos {
+		videos[i].Source = discovery.SourceTrending
+	}
+	p.report("trending_done", fmt.Sprintf("found %d trending videos", len(videos)), nil)
+	return videos, nil
+}
+
+func (p *Pipeline) graph(ctx context.Context, seeds []discovery.Video) ([]discovery.Video, error) {
+	related := make([]string, 0, len(seeds))
+	for _, video := range seeds {
+		related = append(related, video.ChannelID)
+	}
+	channelIDs := discovery.GraphChannelIDs(p.Subscriptions, related, p.graphChannelLimit(), p.graphRelatedLimit())
+	if len(channelIDs) == 0 {
+		p.report("graph", "no graph channels to read", nil)
+		return nil, nil
+	}
+	p.report("graph", fmt.Sprintf("reading uploads from %d graph channels", len(channelIDs)), nil)
+	channels, shortfall, err := p.channels(ctx, channelIDs)
+	if err != nil {
+		return nil, err
+	}
+	if shortfall == "quota" {
+		p.report("graph_skip", "quota exhausted before graph metadata", nil)
+		return nil, nil
+	}
+	var videos []discovery.Video
+	for _, channelID := range channelIDs {
+		playlistID := channels[channelID].UploadsPlaylistID
+		if playlistID == "" {
+			p.report("graph_skip", "no uploads playlist: "+channelID, nil)
+			continue
+		}
+		p.report("graph_uploads", "reading uploads: "+channelID, nil)
+		page, shortfall, err := p.playlistItems(ctx, playlistID)
+		if err != nil {
+			return nil, err
+		}
+		if shortfall == "quota" {
+			p.report("graph_skip", "quota exhausted during graph reads", nil)
+			break
+		}
+		p.report("graph_done", fmt.Sprintf("found %d uploads for %s", len(page.Videos), channelID), nil)
+		videos = append(videos, page.Videos...)
+	}
+	return videos, nil
+}
+
+func (p *Pipeline) playlistItems(ctx context.Context, playlistID string) (discovery.VideoPage, string, error) {
+	reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallPlaylistItems)
+	if errors.Is(err, discovery.ErrQuotaExhausted) {
+		return discovery.VideoPage{}, "quota", nil
+	}
+	if err != nil {
+		return discovery.VideoPage{}, "", fmt.Errorf("reserve playlist items quota: %w", err)
+	}
+	page, err := p.YouTube.PlaylistItems(ctx, p.AccessToken, playlistID, "")
+	if err != nil {
+		_ = p.charge(ctx, reservation.ID)
+		if errors.Is(err, identity.ErrUnauthorized) {
+			return discovery.VideoPage{}, "", err
+		}
+		p.report("graph_skip", "uploads unavailable: "+playlistID, nil)
+		return discovery.VideoPage{}, "", nil
+	}
+	if err := p.charge(ctx, reservation.ID); err != nil {
+		return discovery.VideoPage{}, "", err
+	}
+	for i := range page.Videos {
+		page.Videos[i].Source = discovery.SourceGraph
+	}
+	return page, "", nil
 }
 
 func (p *Pipeline) enrich(ctx context.Context, videos []discovery.Video) ([]discovery.Video, string, error) {
@@ -431,16 +571,33 @@ func (p *Pipeline) newID(videoID, rubricVersion string) string {
 }
 
 func dedupeVideos(videos []discovery.Video) []discovery.Video {
-	seen := make(map[string]bool, len(videos))
+	index := make(map[string]int, len(videos))
 	out := make([]discovery.Video, 0, len(videos))
 	for _, video := range videos {
-		if seen[video.VideoID] {
+		if position, ok := index[video.VideoID]; ok {
+			if discovery.SourceRank(video.Source) < discovery.SourceRank(out[position].Source) {
+				out[position].Source = video.Source
+			}
 			continue
 		}
-		seen[video.VideoID] = true
+		index[video.VideoID] = len(out)
 		out = append(out, video)
 	}
 	return out
+}
+
+func (p *Pipeline) graphChannelLimit() int {
+	if p.GraphChannelLimit <= 0 {
+		return 20
+	}
+	return p.GraphChannelLimit
+}
+
+func (p *Pipeline) graphRelatedLimit() int {
+	if p.GraphRelatedLimit <= 0 {
+		return 10
+	}
+	return p.GraphRelatedLimit
 }
 
 func mergeVideo(base, detail discovery.Video) discovery.Video {
