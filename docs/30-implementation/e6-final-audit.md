@@ -54,7 +54,10 @@ download or a live model call. Those need the owner at the browser and local bin
 2. **Live composition — closed 2026-11-06.** `serve` now composes and saves a batch when
    no cached batch exists. `LiveFeedProvider` serves the cache first and calls
    `liveComposer` only when needed. The composer builds the E4 pipeline from config and
-   saves the batch snapshot.
+   saves the batch snapshot. Verified live with `FEED_SIZE=1`: batch
+   `batch-1793961392159263000` was composed from one real YouTube search result, the card
+   was stored as `analysis_slow` because the local LLM was unreachable, and a second
+   `feed --json` returned the same cached batch.
 3. **Stats and rating UI.** `T-051` and `T-053` have domain and SQLite tests. The
    `ytfeed stats` and weekly prompt are not wired to the CLI or HTTP API.
 4. **Trace wiring.** `T-052` writes spans, but the pipeline and transport do not call the

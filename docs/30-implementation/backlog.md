@@ -152,7 +152,7 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 
 | Date | Item | Result |
 | 2026-11-05 | Live consent | Closed. `ytfeed auth status` reports an active `youtube.readonly` token. |
-| 2026-11-06 | Live composition | Closed. `serve` serves the cached batch or composes and saves one through `liveComposer`. |
+| 2026-11-06 | Live composition | Closed and verified. `serve` composed batch `batch-1793961392159263000` with `FEED_SIZE=1`; the second request returned the cached batch. The card was `analysis_slow` because the LLM was unreachable. |
 | Open | Stats and rating UI | `ytfeed stats` and the weekly prompt are not wired. |
 | Open | Trace call sites | Spans are written but not called by the pipeline or transport. |
 | Open | Real model run | The analyzer is still tested against a fake OpenAI-compatible endpoint. |
