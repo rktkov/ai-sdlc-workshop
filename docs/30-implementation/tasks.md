@@ -56,6 +56,7 @@
 | `T-064` | DONE | 2026-11-06 | Per-channel cap, search/graph expansion, source rotation and the unseen shortfall banner. |
 | `T-065` | DONE | 2026-11-07 | Pending batch saved and streamed first. Concurrent analysis streams analyzed card updates before `batch.done`. |
 | `T-066` | DONE | 2026-11-07 | Live composition view updates cards in place. The source picker keeps the last choice. |
+| `T-067` | DONE | 2026-11-07 | Per-chunk quota accounting, quota document, contract tests and the no-repeat E2E proof. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`

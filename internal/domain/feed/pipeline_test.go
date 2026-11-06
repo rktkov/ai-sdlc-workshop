@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1084,5 +1085,29 @@ func TestPipelineAnalysisConcurrency(t *testing.T) {
 	gate.mu.Unlock()
 	if max != 2 {
 		t.Fatalf("max concurrency = %d, want 2", max)
+	}
+}
+
+func TestPipelineMetadataQuotaPerChunk(t *testing.T) {
+	pipeline := testPipeline(nil)
+	ids := make([]string, 120)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("v%d", i)
+	}
+	quota := &fakeQuota{}
+	pipeline.Quota = quota
+	if _, _, err := pipeline.videos(context.Background(), ids); err != nil {
+		t.Fatalf("videos: %v", err)
+	}
+	if quota.reserved != 3 {
+		t.Fatalf("video reserves = %d, want 3", quota.reserved)
+	}
+	quota = &fakeQuota{}
+	pipeline.Quota = quota
+	if _, _, err := pipeline.channels(context.Background(), ids); err != nil {
+		t.Fatalf("channels: %v", err)
+	}
+	if quota.reserved != 3 {
+		t.Fatalf("channel reserves = %d, want 3", quota.reserved)
 	}
 }

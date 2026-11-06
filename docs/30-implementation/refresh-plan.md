@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved on 2026-11-06. Implementation is in progress. `T-060` and `T-063` are done.
+Approved on 2026-11-06. Implemented on 2026-11-07. `T-060` to `T-067` are done.
 The owner confirmed every decision in §10.
 
 ## 1. Request
@@ -202,18 +202,19 @@ interests, and the user can re-run onboarding to replace them.
 
 ## 6. Quota
 
-| Source | Units |
-|--------|------:|
-| 5 keyword searches | 500 |
-| mostPopular | 1 |
-| channels metadata (250 IDs, 50 per call) | 5 |
-| videos metadata (about 800 IDs, 50 per call) | 16 |
-| graph uploads (20 channels + 10 related channels) | 30 |
-| **Mixed batch** | **about 552** |
+The measured cost is in [`refresh-quota.md`](refresh-quota.md).
 
-At 80% of 10,000 units, that is about **14 mixed refreshes per day**. A `fresh` refresh is
-about 20–30 units. Extra search pages cost 100 each. The quota ledger must reserve
-`playlist_items` and extra pages.
+| Mode | Units per refresh | Refreshes/day at 80% |
+|------|------------------:|---------------------:|
+| `keywords` | 510 | 15 |
+| `trending` | 513 | 15 |
+| `graph` | 601 | 13 |
+| `fresh` | 94 | 85 |
+| `mixed` | 604 | 13 |
+
+The ledger charges `search`, `videos`, `channels`, `most_popular` and `playlist_items` per
+call or per 50-ID chunk. Extra search pages cost 100 units. A `fresh` refresh is much
+cheaper than a mixed refresh because it skips keyword search.
 
 ## 7. Task plan
 
@@ -284,4 +285,4 @@ The owner confirmed all six decisions on 2026-11-06:
 | `T-064` | DONE | Per-channel cap, search/graph expansion, source rotation and the 20-unseen shortfall banner. |
 | `T-065` | DONE | Pending cards save and stream first. Analysis runs at concurrency 2 and streams analyzed updates. |
 | `T-066` | DONE | Interactive composition view updates cards in place. The source picker keeps the last choice. |
-| `T-067` | TODO | Docs, quota update, contract and E2E tests. |
+| `T-067` | DONE | Quota document, contract tests and the no-repeat E2E proof. |

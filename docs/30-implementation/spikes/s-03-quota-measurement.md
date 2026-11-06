@@ -142,3 +142,10 @@ prints it.
 - `.secrets/` is in `.gitignore`.
 - The JSON report contains counts, not the key or video titles.
 - The harness redacts the key from error messages.
+
+## Addendum — refresh overhaul (2026-11-07)
+
+The refresh overhaul adds trending, graph uploads and shown history. The base measurement
+above still applies to a keyword-only refresh. The active estimate for all refresh modes is
+[`refresh-quota.md`](../refresh-quota.md). It includes `playlistItems.list`, per-50-ID
+metadata chunks and extra search pages.

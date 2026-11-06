@@ -560,42 +560,52 @@ func (p *Pipeline) enrich(ctx context.Context, videos []discovery.Video) ([]disc
 
 func (p *Pipeline) videos(ctx context.Context, ids []string) ([]discovery.Video, string, error) {
 	p.report("videos", fmt.Sprintf("loading metadata for %d videos", len(ids)), nil)
-	reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallVideos)
-	if errors.Is(err, discovery.ErrQuotaExhausted) {
-		return nil, "quota", nil
+	var out []discovery.Video
+	for _, chunk := range chunkStrings(ids, 50) {
+		reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallVideos)
+		if errors.Is(err, discovery.ErrQuotaExhausted) {
+			return out, "quota", nil
+		}
+		if err != nil {
+			return nil, "", fmt.Errorf("reserve videos quota: %w", err)
+		}
+		details, err := p.YouTube.Videos(ctx, p.AccessToken, chunk)
+		if err != nil {
+			_ = p.charge(ctx, reservation.ID)
+			return out, "", nil
+		}
+		if err := p.charge(ctx, reservation.ID); err != nil {
+			return out, "", err
+		}
+		out = append(out, details...)
 	}
-	if err != nil {
-		return nil, "", fmt.Errorf("reserve videos quota: %w", err)
-	}
-	details, err := p.YouTube.Videos(ctx, p.AccessToken, ids)
-	if err != nil {
-		_ = p.charge(ctx, reservation.ID)
-		return nil, "", nil
-	}
-	if err := p.charge(ctx, reservation.ID); err != nil {
-		return nil, "", err
-	}
-	return details, "", nil
+	return out, "", nil
 }
 
 func (p *Pipeline) channels(ctx context.Context, ids []string) (map[string]identity.Subscription, string, error) {
 	p.report("channels", fmt.Sprintf("loading metadata for %d channels", len(ids)), nil)
-	reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallChannels)
-	if errors.Is(err, discovery.ErrQuotaExhausted) {
-		return nil, "quota", nil
+	out := make(map[string]identity.Subscription, len(ids))
+	for _, chunk := range chunkStrings(ids, 50) {
+		reservation, err := p.Quota.Reserve(ctx, p.UserID, discovery.CallChannels)
+		if errors.Is(err, discovery.ErrQuotaExhausted) {
+			return out, "quota", nil
+		}
+		if err != nil {
+			return nil, "", fmt.Errorf("reserve channels quota: %w", err)
+		}
+		channels, err := p.YouTube.Channels(ctx, p.AccessToken, chunk)
+		if err != nil {
+			_ = p.charge(ctx, reservation.ID)
+			return out, "", nil
+		}
+		if err := p.charge(ctx, reservation.ID); err != nil {
+			return out, "", err
+		}
+		for channelID, subscription := range channels {
+			out[channelID] = subscription
+		}
 	}
-	if err != nil {
-		return nil, "", fmt.Errorf("reserve channels quota: %w", err)
-	}
-	channels, err := p.YouTube.Channels(ctx, p.AccessToken, ids)
-	if err != nil {
-		_ = p.charge(ctx, reservation.ID)
-		return nil, "", nil
-	}
-	if err := p.charge(ctx, reservation.ID); err != nil {
-		return nil, "", err
-	}
-	return channels, "", nil
+	return out, "", nil
 }
 
 func (p *Pipeline) charge(ctx context.Context, reservationID string) error {
@@ -971,6 +981,22 @@ func appendRelated(related []string, videos []discovery.Video) []string {
 		related = append(related, channelID)
 	}
 	return related
+}
+
+func chunkStrings(values []string, size int) [][]string {
+	if size <= 0 {
+		size = 50
+	}
+	var out [][]string
+	for len(values) > 0 {
+		count := size
+		if len(values) < count {
+			count = len(values)
+		}
+		out = append(out, values[:count])
+		values = values[count:]
+	}
+	return out
 }
 
 func dedupeVideos(videos []discovery.Video) []discovery.Video {

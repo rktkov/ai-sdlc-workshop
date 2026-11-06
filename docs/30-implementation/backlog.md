@@ -174,7 +174,7 @@ Plan: [`refresh-plan.md`](refresh-plan.md). Status: approved 2026-11-06.
 | `T-064` | DONE | T-062, T-063 | M | Per-channel cap, candidate expansion, source rotation and the 20-unseen guarantee with a shortfall banner. |
 | `T-065` | DONE | T-064 | L | Save pending cards, analyze at concurrency 2 and stream card updates. |
 | `T-066` | DONE | T-065 | M | Interactive card updates and the source picker refresh path. |
-| `T-067` | TODO | T-060…T-066 | M | Docs, quota update, contract and E2E tests. |
+| `T-067` | DONE | T-060…T-066 | M | Quota document, contract tests and the no-repeat E2E proof. |
 
 
 ## Progress
@@ -229,3 +229,4 @@ Plan: [`refresh-plan.md`](refresh-plan.md). Status: approved 2026-11-06.
 | 2026-11-06 | `T-064` | DONE. `FEED_CHANNEL_CAP` defaults to 2. Search pages and graph channels expand until the batch reaches its size. Mixed and fresh modes rotate sources. A shortfall banner never pads with seen videos. |
 | 2026-11-07 | `T-065` | DONE. The pipeline saves and streams the pending batch, analyzes at `ANALYSIS_CONCURRENCY`, and streams each analyzed card before `batch.done`. |
 | 2026-11-07 | `T-066` | DONE. The interactive refresh renders a live composition view and updates cards by ID. The source picker keeps the last choice. |
+| 2026-11-07 | `T-067` | DONE. Per-chunk quota accounting, [`refresh-quota.md`](refresh-quota.md), contract tests and E2E tests prove 20 unseen cards, no repeats and the shortfall banner. |
