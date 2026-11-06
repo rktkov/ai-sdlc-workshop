@@ -54,7 +54,7 @@ type pipelineRunner interface {
 	Run(ctx context.Context) (feed.Result, error)
 }
 
-type pipelineFactory func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, source discovery.RefreshSource, subscriptions []identity.Subscription, progress feed.ProgressFunc) pipelineRunner
+type pipelineFactory func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, source discovery.RefreshSource, subscriptions []identity.Subscription, hooks feed.StreamHooks) pipelineRunner
 
 type liveComposer struct {
 	UserID     string
@@ -76,52 +76,26 @@ func (c *liveComposer) Compose(ctx context.Context, userID string) (feed.Batch, 
 
 // ComposeWithProgress builds and saves one batch and reports each step.
 func (c *liveComposer) ComposeWithProgress(ctx context.Context, userID string, progress feed.ProgressFunc) (feed.Batch, error) {
-	if c.Tokens == nil || c.Profiles == nil || c.Store == nil || c.Factory == nil {
-		return feed.Batch{}, errors.New("live composer is not configured")
-	}
-	now := c.now()
-	source, ok := discovery.RefreshSourceFromContextOK(ctx)
-	if !ok {
-		source = c.Source
-	}
-	if source == "" {
-		source = discovery.RefreshMixed
-	}
-	c.report(progress, "source", "refresh source: "+string(source), nil)
-	c.report(progress, "auth", "checking the Google token", nil)
-	token, err := c.Tokens.ValidToken(ctx)
+	return c.ComposeWithHooks(ctx, userID, feed.StreamHooks{Progress: progress})
+}
+
+// ComposeWithHooks builds a batch and streams pending and analyzed cards.
+func (c *liveComposer) ComposeWithHooks(ctx context.Context, userID string, hooks feed.StreamHooks) (feed.Batch, error) {
+	inputs, err := c.loadInputs(ctx, userID, hooks.Progress)
 	if err != nil {
-		return feed.Batch{}, fmt.Errorf("%w: %v", feed.ErrNotAuthenticated, err)
-	}
-	c.report(progress, "auth_done", "token ready", nil)
-	c.report(progress, "interests", "loading interests", nil)
-	interests, err := c.Profiles.Interests(ctx, userID)
-	if err != nil && !errors.Is(err, taste.ErrProfileNotFound) {
 		return feed.Batch{}, err
 	}
-	if len(interests) == 0 {
-		interests, err = c.interestsFromChannels(ctx, userID)
-		if err != nil {
-			return feed.Batch{}, err
+	streamHooks := hooks
+	streamHooks.Batch = func(batch feed.Batch) error {
+		if err := c.Store.Save(ctx, batch); err != nil {
+			return err
 		}
-	}
-	c.report(progress, "profile", "loading the taste profile", nil)
-	profile, err := c.Profiles.Snapshot(ctx, userID)
-	if err != nil {
-		if errors.Is(err, taste.ErrProfileNotFound) {
-			return feed.Batch{}, fmt.Errorf("%w: %v", feed.ErrNoProfile, err)
+		if hooks.Batch != nil {
+			return hooks.Batch(batch)
 		}
-		return feed.Batch{}, err
+		return nil
 	}
-	exclusions, err := c.loadExclusions(ctx, userID, now)
-	if err != nil {
-		return feed.Batch{}, err
-	}
-	subscriptions, err := c.loadSubscriptions(ctx, userID, source, progress)
-	if err != nil {
-		return feed.Batch{}, err
-	}
-	runner := c.Factory(profile, interests, token, exclusions, source, subscriptions, progress)
+	runner := c.Factory(inputs.profile, inputs.interests, inputs.token, inputs.exclusions, inputs.source, inputs.subscriptions, streamHooks)
 	if runner == nil {
 		return feed.Batch{}, errors.New("pipeline factory returned nil")
 	}
@@ -131,11 +105,11 @@ func (c *liveComposer) ComposeWithProgress(ctx context.Context, userID string, p
 	}
 	batch := result.Batch
 	if result.Shortfall == "quota" {
-		c.report(progress, "degraded", "quota exhausted; serving a degraded feed", nil)
+		c.report(hooks.Progress, "degraded", "quota exhausted; serving a degraded feed", nil)
 		batch = feed.Batch{
-			ID: c.batchID(now), UserID: userID, Size: c.size(),
+			ID: c.batchID(inputs.now), UserID: userID, Size: c.size(),
 			State: feed.BatchDegraded, DegradationReason: feed.DegradeQuota,
-			CreatedAt: now, CompletedAt: now,
+			CreatedAt: inputs.now, CompletedAt: inputs.now,
 		}
 	}
 	if batch.ID == "" {
@@ -144,8 +118,73 @@ func (c *liveComposer) ComposeWithProgress(ctx context.Context, userID string, p
 	if err := c.Store.Save(ctx, batch); err != nil {
 		return feed.Batch{}, err
 	}
-	c.report(progress, "done", "batch ready", nil)
+	c.report(hooks.Progress, "done", "batch ready", nil)
 	return batch, nil
+}
+
+type composeInputs struct {
+	now           time.Time
+	source        discovery.RefreshSource
+	token         identity.Token
+	interests     []string
+	profile       taste.ProfileSnapshot
+	exclusions    discovery.ExclusionSet
+	subscriptions []identity.Subscription
+}
+
+func (c *liveComposer) loadInputs(ctx context.Context, userID string, progress feed.ProgressFunc) (composeInputs, error) {
+	if c.Tokens == nil || c.Profiles == nil || c.Store == nil || c.Factory == nil {
+		return composeInputs{}, errors.New("live composer is not configured")
+	}
+	inputs := composeInputs{now: c.now()}
+	source, ok := discovery.RefreshSourceFromContextOK(ctx)
+	if !ok {
+		source = c.Source
+	}
+	if source == "" {
+		source = discovery.RefreshMixed
+	}
+	inputs.source = source
+	c.report(progress, "source", "refresh source: "+string(source), nil)
+	c.report(progress, "auth", "checking the Google token", nil)
+	token, err := c.Tokens.ValidToken(ctx)
+	if err != nil {
+		return composeInputs{}, fmt.Errorf("%w: %v", feed.ErrNotAuthenticated, err)
+	}
+	inputs.token = token
+	c.report(progress, "auth_done", "token ready", nil)
+	c.report(progress, "interests", "loading interests", nil)
+	interests, err := c.Profiles.Interests(ctx, userID)
+	if err != nil && !errors.Is(err, taste.ErrProfileNotFound) {
+		return composeInputs{}, err
+	}
+	if len(interests) == 0 {
+		interests, err = c.interestsFromChannels(ctx, userID)
+		if err != nil {
+			return composeInputs{}, err
+		}
+	}
+	inputs.interests = interests
+	c.report(progress, "profile", "loading the taste profile", nil)
+	profile, err := c.Profiles.Snapshot(ctx, userID)
+	if err != nil {
+		if errors.Is(err, taste.ErrProfileNotFound) {
+			return composeInputs{}, fmt.Errorf("%w: %v", feed.ErrNoProfile, err)
+		}
+		return composeInputs{}, err
+	}
+	inputs.profile = profile
+	exclusions, err := c.loadExclusions(ctx, userID, inputs.now)
+	if err != nil {
+		return composeInputs{}, err
+	}
+	inputs.exclusions = exclusions
+	subscriptions, err := c.loadSubscriptions(ctx, userID, source, progress)
+	if err != nil {
+		return composeInputs{}, err
+	}
+	inputs.subscriptions = subscriptions
+	return inputs, nil
 }
 
 func (c *liveComposer) loadExclusions(ctx context.Context, userID string, now time.Time) (discovery.ExclusionSet, error) {
@@ -222,7 +261,7 @@ func newLiveComposer(cfg config.Config, db *sql.DB) *liveComposer {
 	profiles := sqlite.NewProfileRepository(db)
 	tasteService := &taste.Service{Profiles: profiles}
 	dataDir := cfg.Storage.DataDir
-	factory := func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, source discovery.RefreshSource, subscriptions []identity.Subscription, progress feed.ProgressFunc) pipelineRunner {
+	factory := func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, source discovery.RefreshSource, subscriptions []identity.Subscription, hooks feed.StreamHooks) pipelineRunner {
 		youtubeSource := youtube.NewSource("", nil)
 		youtubeSource.Region = cfg.YouTube.Region
 		quota := &discovery.QuotaService{Store: sqlite.NewQuotaRepository(db)}
@@ -235,10 +274,11 @@ func newLiveComposer(cfg config.Config, db *sql.DB) *liveComposer {
 			Size: cfg.Feed.Size, MicroTarget: 0.2, RubricVersion: profile.RubricVersion,
 			ModelID: cfg.LLM.Model, Staging: cfg.Analysis.Staging, Source: source, Exclusions: exclusions,
 			Subscriptions: subscriptions, GraphChannelLimit: cfg.Feed.GraphChannelLimit, GraphRelatedLimit: cfg.Feed.GraphRelatedLimit, ChannelCap: cfg.Feed.ChannelCap,
+			AnalysisConcurrency: cfg.Analysis.Concurrency, OnBatch: hooks.Batch, OnCard: hooks.Card,
 			Planner: discovery.QueryPlanner{}, YouTube: youtubeSource, Quota: quota,
 			Fetcher: fetcher, Transcripts: staging, Analyzer: analyzer,
 			Analyses: sqlite.NewAnalysisRepository(db),
-			Progress: progress,
+			Progress: hooks.Progress,
 		}
 	}
 	var tokens tokenReader = fileTokenReader{store: tokenfile.New(dataDir)}

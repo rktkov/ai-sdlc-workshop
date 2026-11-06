@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rktkov/ytfeed/internal/domain/analysis"
@@ -38,23 +39,35 @@ type Analyzer interface {
 // ProgressFunc reports one composition step.
 type ProgressFunc func(stage, message string, attributes map[string]any)
 
+// StreamHooks receives progressive batch and card updates.
+type StreamHooks struct {
+	Progress ProgressFunc
+	Batch    func(Batch) error
+	Card     func(Batch, Card)
+}
+
 // Pipeline runs discovery, selection and analysis in order.
 type Pipeline struct {
-	UserID            string
-	AccessToken       string
-	Interests         []string
-	Size              int
-	MicroTarget       float64
-	RubricVersion     string
-	ModelID           string
-	BatchID           string
-	Staging           bool
-	Source            discovery.RefreshSource
-	Exclusions        discovery.ExclusionSet
-	Subscriptions     []identity.Subscription
-	GraphChannelLimit int
-	GraphRelatedLimit int
-	ChannelCap        int
+	UserID              string
+	AccessToken         string
+	Interests           []string
+	Size                int
+	MicroTarget         float64
+	RubricVersion       string
+	ModelID             string
+	BatchID             string
+	Staging             bool
+	Source              discovery.RefreshSource
+	Exclusions          discovery.ExclusionSet
+	Subscriptions       []identity.Subscription
+	GraphChannelLimit   int
+	GraphRelatedLimit   int
+	ChannelCap          int
+	AnalysisConcurrency int
+	OnBatch             func(Batch) error
+	OnCard              func(Batch, Card)
+
+	reportMu sync.Mutex
 
 	Planner     Planner
 	YouTube     discovery.YouTube
@@ -118,7 +131,31 @@ func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
 		p.report("shortfall", fmt.Sprintf("only %d of %d unseen cards are available", len(selection.Selected), p.Size), nil)
 	}
 
-	analyses, err := p.analyze(ctx, selection.Selected)
+	pending, err := ComposeBatch(p.batchID(), p.UserID, p.Size, selection.Selected, nil)
+	if err != nil {
+		return Result{}, err
+	}
+	p.degradeShortfall(&pending, selection)
+	if p.OnBatch != nil {
+		if err := p.OnBatch(cloneBatch(pending)); err != nil {
+			return Result{}, fmt.Errorf("save pending batch: %w", err)
+		}
+	}
+	analyses, err := p.analyze(ctx, selection.Selected, func(value analysis.Analysis) error {
+		if p.OnCard == nil {
+			return nil
+		}
+		cardID := "card-" + value.VideoID
+		if err := ApplyAnalysis(&pending, cardID, value, -1); err != nil {
+			return err
+		}
+		card, index := findCard(&pending, cardID)
+		if index < 0 {
+			return fmt.Errorf("card %q disappeared", cardID)
+		}
+		p.OnCard(cloneBatch(pending), card)
+		return nil
+	})
 	if err != nil {
 		return Result{}, err
 	}
@@ -130,12 +167,22 @@ func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if len(selection.Selected) < p.Size {
-		batch.State = BatchDegraded
-		batch.DegradationReason = DegradeShortfall
-		batch.CompletedAt = p.now()
-	}
+	p.degradeShortfall(&batch, selection)
 	return Result{Selection: selection, Analyses: analyses, Batch: batch, Shortfall: selection.Shortfall}, nil
+}
+
+func cloneBatch(batch Batch) Batch {
+	batch.Cards = append([]Card(nil), batch.Cards...)
+	return batch
+}
+
+func (p *Pipeline) degradeShortfall(batch *Batch, selection discovery.Selection) {
+	if len(selection.Selected) >= p.Size {
+		return
+	}
+	batch.State = BatchDegraded
+	batch.DegradationReason = DegradeShortfall
+	batch.CompletedAt = p.now()
 }
 
 func (p *Pipeline) validate() error {
@@ -558,26 +605,75 @@ func (p *Pipeline) charge(ctx context.Context, reservationID string) error {
 	return nil
 }
 
-func (p *Pipeline) analyze(ctx context.Context, selected []discovery.SelectedCandidate) (out []analysis.Analysis, err error) {
+func (p *Pipeline) analyze(ctx context.Context, selected []discovery.SelectedCandidate, onResult func(analysis.Analysis) error) (out []analysis.Analysis, err error) {
 	span := p.startSpan(ctx, "feed.analyze", map[string]any{"batch_id": p.BatchID, "count": len(selected)})
 	defer func() { span.End(err) }()
+	type result struct {
+		index int
+		value analysis.Analysis
+		err   error
+	}
+	concurrency := p.analysisConcurrency()
+	sem := make(chan struct{}, concurrency)
+	results := make(chan result, len(selected))
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var wg sync.WaitGroup
+	for index, candidate := range selected {
+		wg.Add(1)
+		go func(index int, candidate discovery.SelectedCandidate) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-runCtx.Done():
+				results <- result{index: index, err: runCtx.Err()}
+				return
+			}
+			value, err := p.analyzeCandidate(runCtx, candidate)
+			results <- result{index: index, value: value, err: err}
+		}(index, candidate)
+	}
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
 	out = make([]analysis.Analysis, 0, len(selected))
-	for _, candidate := range selected {
-		existing, err := p.Analyses.FindByKey(ctx, p.UserID, candidate.VideoID, p.RubricVersion)
-		if err == nil {
-			out = append(out, existing)
+	values := make([]analysis.Analysis, len(selected))
+	var firstErr error
+	for item := range results {
+		if item.err != nil {
+			if firstErr == nil {
+				firstErr = item.err
+				cancel()
+			}
 			continue
 		}
-		if !errors.Is(err, analysis.ErrAnalysisNotFound) {
-			return nil, fmt.Errorf("find analysis: %w", err)
+		values[item.index] = item.value
+		out = append(out, item.value)
+		if onResult != nil {
+			if err := onResult(item.value); err != nil && firstErr == nil {
+				firstErr = err
+				cancel()
+			}
 		}
-		value, err := p.analyzeOne(ctx, candidate)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, value)
 	}
-	return out, nil
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return values, nil
+}
+
+func (p *Pipeline) analyzeCandidate(ctx context.Context, candidate discovery.SelectedCandidate) (analysis.Analysis, error) {
+	existing, err := p.Analyses.FindByKey(ctx, p.UserID, candidate.VideoID, p.RubricVersion)
+	if err == nil {
+		return existing, nil
+	}
+	if !errors.Is(err, analysis.ErrAnalysisNotFound) {
+		return analysis.Analysis{}, fmt.Errorf("find analysis: %w", err)
+	}
+	return p.analyzeOne(ctx, candidate)
 }
 
 func (p *Pipeline) analyzeOne(ctx context.Context, candidate discovery.SelectedCandidate) (analysis.Analysis, error) {
@@ -668,9 +764,12 @@ func (p *Pipeline) saveFailed(ctx context.Context, candidate discovery.SelectedC
 }
 
 func (p *Pipeline) report(stage, message string, attributes map[string]any) {
-	if p.Progress != nil {
-		p.Progress(stage, message, attributes)
+	if p.Progress == nil {
+		return
 	}
+	p.reportMu.Lock()
+	defer p.reportMu.Unlock()
+	p.Progress(stage, message, attributes)
 }
 
 func (p *Pipeline) startSpan(ctx context.Context, name string, attributes map[string]any) *trace.Span {
@@ -678,6 +777,16 @@ func (p *Pipeline) startSpan(ctx context.Context, name string, attributes map[st
 		return &trace.Span{}
 	}
 	return p.Tracer.Start(ctx, name, attributes)
+}
+
+func (p *Pipeline) analysisConcurrency() int {
+	if p.AnalysisConcurrency <= 0 {
+		return 2
+	}
+	if p.AnalysisConcurrency > 8 {
+		return 8
+	}
+	return p.AnalysisConcurrency
 }
 
 func (p *Pipeline) now() time.Time {

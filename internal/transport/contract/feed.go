@@ -56,23 +56,28 @@ func FeedFromBatch(batch feed.Batch) Feed {
 		Cards:             make([]FeedCard, 0, len(batch.Cards)),
 	}
 	for _, card := range batch.Cards {
-		axes := make([]AxisScore, 0, len(card.ScoredAxes))
-		for _, score := range card.ScoredAxes {
-			axes = append(axes, AxisScore{Axis: score.Axis, Score: score.Score})
-		}
-		out.Cards = append(out.Cards, FeedCard{
-			CardID: card.CardID, VideoID: card.VideoID, ChannelID: card.ChannelID,
-			Title: card.Title, Channel: card.Channel, SubscriberCount: card.SubscriberCount,
-			Views: card.Views, DurationSeconds: int64(card.Duration.Seconds()),
-			PublishedAt: card.PublishedAt.UTC().Format(time.RFC3339),
-			Topic:       card.Topic, TLDR: card.TLDR, Similarity: card.Similarity,
-			WhyThisCard: card.WhyThisCard, State: string(card.State), Reason: card.Reason,
-			AnalysisID: card.AnalysisID, Score: card.Score, Position: card.Position,
-			Decision: string(card.Decision), AnalyzedLate: card.AnalyzedLate,
-			ScoredAxes: axes,
-		})
+		out.Cards = append(out.Cards, FeedCardFromCard(card))
 	}
 	return out
+}
+
+// FeedCardFromCard maps one feed card to the wire contract.
+func FeedCardFromCard(card feed.Card) FeedCard {
+	axes := make([]AxisScore, 0, len(card.ScoredAxes))
+	for _, score := range card.ScoredAxes {
+		axes = append(axes, AxisScore{Axis: score.Axis, Score: score.Score})
+	}
+	return FeedCard{
+		CardID: card.CardID, VideoID: card.VideoID, ChannelID: card.ChannelID,
+		Title: card.Title, Channel: card.Channel, SubscriberCount: card.SubscriberCount,
+		Views: card.Views, DurationSeconds: int64(card.Duration.Seconds()),
+		PublishedAt: card.PublishedAt.UTC().Format(time.RFC3339),
+		Topic:       card.Topic, TLDR: card.TLDR, Similarity: card.Similarity,
+		WhyThisCard: card.WhyThisCard, State: string(card.State), Reason: card.Reason,
+		AnalysisID: card.AnalysisID, Score: card.Score, Position: card.Position,
+		Decision: string(card.Decision), AnalyzedLate: card.AnalyzedLate,
+		ScoredAxes: axes,
+	}
 }
 
 func bannerFor(batch feed.Batch) string {

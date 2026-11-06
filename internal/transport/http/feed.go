@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/rktkov/ytfeed/internal/domain/discovery"
 	"github.com/rktkov/ytfeed/internal/domain/feed"
@@ -50,6 +51,11 @@ type FeedProgressProvider interface {
 	FeedWithProgress(ctx context.Context, userID string, progress feed.ProgressFunc) (feed.Batch, error)
 }
 
+// FeedStreamProvider serves a batch and streams pending and analyzed cards.
+type FeedStreamProvider interface {
+	FeedWithStream(ctx context.Context, userID string, hooks feed.StreamHooks) (feed.Batch, error)
+}
+
 // LiveFeedProvider serves the cache or composes a new batch.
 type LiveFeedProvider struct {
 	Store    FeedStore
@@ -81,6 +87,33 @@ func (p LiveFeedProvider) FeedWithProgress(ctx context.Context, _ string, progre
 	}
 	if composer, ok := p.Composer.(ProgressComposer); ok {
 		return composer.ComposeWithProgress(ctx, p.UserID, progress)
+	}
+	return p.Composer.Compose(ctx, p.UserID)
+}
+
+// FeedWithStream returns the cache or composes with card hooks.
+func (p LiveFeedProvider) FeedWithStream(ctx context.Context, _ string, hooks feed.StreamHooks) (feed.Batch, error) {
+	if p.Store != nil && !RefreshRequested(ctx) {
+		batch, err := p.Store.LatestCompleted(ctx, p.UserID)
+		if err == nil {
+			return batch, nil
+		}
+		if !errors.Is(err, feed.ErrNoCachedFeed) {
+			return feed.Batch{}, err
+		}
+	}
+	if p.Composer == nil {
+		return feed.Batch{}, feed.ErrNoCachedFeed
+	}
+	if composer, ok := p.Composer.(interface {
+		ComposeWithHooks(context.Context, string, feed.StreamHooks) (feed.Batch, error)
+	}); ok {
+		return composer.ComposeWithHooks(ctx, p.UserID, hooks)
+	}
+	if hooks.Progress != nil {
+		if composer, ok := p.Composer.(ProgressComposer); ok {
+			return composer.ComposeWithProgress(ctx, p.UserID, hooks.Progress)
+		}
 	}
 	return p.Composer.Compose(ctx, p.UserID)
 }
@@ -174,11 +207,39 @@ func streamFeed(w http.ResponseWriter, provider FeedProvider, ctx context.Contex
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
+	var writeMu sync.Mutex
+	write := func(name string, value any) {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		writeEvent(w, flusher, name, value)
+	}
+
 	var batch feed.Batch
 	var err error
-	if progressProvider, ok := provider.(FeedProgressProvider); ok {
+	started := false
+	if streamProvider, ok := provider.(FeedStreamProvider); ok {
+		batch, err = streamProvider.FeedWithStream(ctx, "owner", feed.StreamHooks{
+			Progress: func(stage, message string, attributes map[string]any) {
+				write("progress", map[string]any{
+					"stage": stage, "message": message, "attributes": attributes,
+				})
+			},
+			Batch: func(value feed.Batch) error {
+				started = true
+				payload := contract.FeedFromBatch(value)
+				writeBatchStarted(write, payload)
+				for _, card := range payload.Cards {
+					write("card.upsert", card)
+				}
+				return nil
+			},
+			Card: func(_ feed.Batch, card feed.Card) {
+				write("card.upsert", contract.FeedCardFromCard(card))
+			},
+		})
+	} else if progressProvider, ok := provider.(FeedProgressProvider); ok {
 		batch, err = progressProvider.FeedWithProgress(ctx, "owner", func(stage, message string, attributes map[string]any) {
-			writeEvent(w, flusher, "progress", map[string]any{
+			write("progress", map[string]any{
 				"stage": stage, "message": message, "attributes": attributes,
 			})
 		})
@@ -186,12 +247,18 @@ func streamFeed(w http.ResponseWriter, provider FeedProvider, ctx context.Contex
 		batch, err = provider.Feed(ctx, "owner")
 	}
 	if err != nil {
-		writeEvent(w, flusher, "error", map[string]any{"error": feedErrorCode(err)})
+		write("error", map[string]any{"error": feedErrorCode(err)})
+		return
+	}
+	if started {
+		write("batch.done", map[string]any{
+			"batch_id": batch.ID, "state": string(batch.State),
+		})
 		return
 	}
 	payload := contract.FeedFromBatch(batch)
 	if err := payload.Validate(); err != nil {
-		writeEvent(w, flusher, "error", map[string]any{"error": "invalid_feed"})
+		write("error", map[string]any{"error": "invalid_feed"})
 		return
 	}
 	writeFeedEvents(w, flusher, payload)
@@ -212,15 +279,20 @@ func feedErrorCode(err error) string {
 	}
 }
 
-func writeFeedEvents(w http.ResponseWriter, flusher http.Flusher, payload contract.Feed) {
-	writeEvent(w, flusher, "batch.started", map[string]any{
+func writeBatchStarted(write func(string, any), payload contract.Feed) {
+	write("batch.started", map[string]any{
 		"batch_id": payload.BatchID, "state": payload.State, "size": len(payload.Cards),
 		"banner": payload.Banner, "degradation_reason": payload.DegradationReason,
 	})
+}
+
+func writeFeedEvents(w http.ResponseWriter, flusher http.Flusher, payload contract.Feed) {
+	write := func(name string, value any) { writeEvent(w, flusher, name, value) }
+	writeBatchStarted(write, payload)
 	for _, card := range payload.Cards {
-		writeEvent(w, flusher, "card.upsert", card)
+		write("card.upsert", card)
 	}
-	writeEvent(w, flusher, "batch.done", map[string]any{
+	write("batch.done", map[string]any{
 		"batch_id": payload.BatchID, "state": payload.State,
 	})
 }

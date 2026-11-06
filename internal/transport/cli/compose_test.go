@@ -95,7 +95,7 @@ func liveComposerFixture() (*liveComposer, *fakeBatchSaver, *[]string) {
 		Channels:   fakeChannelLister{},
 		Exclusions: fakeExclusionReader{set: discovery.ExclusionSet{Watched: map[string]bool{"old": true}}},
 		Store:      store,
-		Factory: func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, _ discovery.RefreshSource, _ []identity.Subscription, _ feed.ProgressFunc) pipelineRunner {
+		Factory: func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, _ discovery.RefreshSource, _ []identity.Subscription, _ feed.StreamHooks) pipelineRunner {
 			seen = append(seen, interests...)
 			if len(exclusions.Watched) != 1 {
 				seen = append(seen, "missing-exclusions")
@@ -161,7 +161,7 @@ func TestLiveComposerNoProfile(t *testing.T) {
 
 func TestLiveComposerQuotaShortfall(t *testing.T) {
 	composer, store, _ := liveComposerFixture()
-	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet, discovery.RefreshSource, []identity.Subscription, feed.ProgressFunc) pipelineRunner {
+	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet, discovery.RefreshSource, []identity.Subscription, feed.StreamHooks) pipelineRunner {
 		return fakeRunner{result: feed.Result{Shortfall: "quota"}}
 	}
 	batch, err := composer.Compose(context.Background(), "owner")
@@ -183,7 +183,7 @@ func TestLiveComposerErrors(t *testing.T) {
 		t.Fatal("Compose(exclusion error) = nil, want an error")
 	}
 	composer, _, _ = liveComposerFixture()
-	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet, discovery.RefreshSource, []identity.Subscription, feed.ProgressFunc) pipelineRunner {
+	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet, discovery.RefreshSource, []identity.Subscription, feed.StreamHooks) pipelineRunner {
 		return fakeRunner{err: errors.New("pipeline")}
 	}
 	if _, err := composer.Compose(context.Background(), "owner"); err == nil {
@@ -223,7 +223,7 @@ func TestLiveComposerProgress(t *testing.T) {
 func TestLiveComposerSource(t *testing.T) {
 	composer, _, _ := liveComposerFixture()
 	var got discovery.RefreshSource
-	composer.Factory = func(_ taste.ProfileSnapshot, _ []string, _ identity.Token, _ discovery.ExclusionSet, source discovery.RefreshSource, _ []identity.Subscription, _ feed.ProgressFunc) pipelineRunner {
+	composer.Factory = func(_ taste.ProfileSnapshot, _ []string, _ identity.Token, _ discovery.ExclusionSet, source discovery.RefreshSource, _ []identity.Subscription, _ feed.StreamHooks) pipelineRunner {
 		got = source
 		return fakeRunner{result: feed.Result{Batch: liveBatch()}}
 	}
@@ -240,7 +240,7 @@ func TestLiveComposerDefaultSource(t *testing.T) {
 	composer, _, _ := liveComposerFixture()
 	composer.Source = discovery.RefreshTrending
 	var got discovery.RefreshSource
-	composer.Factory = func(_ taste.ProfileSnapshot, _ []string, _ identity.Token, _ discovery.ExclusionSet, source discovery.RefreshSource, _ []identity.Subscription, _ feed.ProgressFunc) pipelineRunner {
+	composer.Factory = func(_ taste.ProfileSnapshot, _ []string, _ identity.Token, _ discovery.ExclusionSet, source discovery.RefreshSource, _ []identity.Subscription, _ feed.StreamHooks) pipelineRunner {
 		got = source
 		return fakeRunner{result: feed.Result{Batch: liveBatch()}}
 	}
@@ -257,7 +257,7 @@ func TestLiveComposerGraphSubscriptions(t *testing.T) {
 	composer.Source = discovery.RefreshMixed
 	composer.Channels = fakeChannelLister{channels: []identity.Subscription{{ChannelID: "c1"}, {ChannelID: "c2"}}}
 	var got []identity.Subscription
-	composer.Factory = func(_ taste.ProfileSnapshot, _ []string, _ identity.Token, _ discovery.ExclusionSet, _ discovery.RefreshSource, subscriptions []identity.Subscription, _ feed.ProgressFunc) pipelineRunner {
+	composer.Factory = func(_ taste.ProfileSnapshot, _ []string, _ identity.Token, _ discovery.ExclusionSet, _ discovery.RefreshSource, subscriptions []identity.Subscription, _ feed.StreamHooks) pipelineRunner {
 		got = subscriptions
 		return fakeRunner{result: feed.Result{Batch: liveBatch()}}
 	}
@@ -275,5 +275,49 @@ func TestLiveComposerTrendingSkipsSubscriptions(t *testing.T) {
 	composer.Channels = fakeChannelLister{err: errors.New("db down")}
 	if _, err := composer.Compose(context.Background(), "owner"); err != nil {
 		t.Fatalf("Compose: %v", err)
+	}
+}
+
+type recordingSaver struct {
+	batches []feed.Batch
+}
+
+func (r *recordingSaver) Save(_ context.Context, batch feed.Batch) error {
+	r.batches = append(r.batches, batch)
+	return nil
+}
+
+type hookRunner struct {
+	hooks feed.StreamHooks
+	final feed.Batch
+}
+
+func (r hookRunner) Run(context.Context) (feed.Result, error) {
+	pending := r.final
+	pending.State = feed.BatchStreaming
+	if r.hooks.Batch != nil {
+		if err := r.hooks.Batch(pending); err != nil {
+			return feed.Result{}, err
+		}
+	}
+	return feed.Result{Batch: r.final}, nil
+}
+
+func TestLiveComposerSavesPendingBatch(t *testing.T) {
+	composer, _, _ := liveComposerFixture()
+	saver := &recordingSaver{}
+	composer.Store = saver
+	composer.Source = discovery.RefreshKeywords
+	composer.Factory = func(_ taste.ProfileSnapshot, _ []string, _ identity.Token, _ discovery.ExclusionSet, _ discovery.RefreshSource, _ []identity.Subscription, hooks feed.StreamHooks) pipelineRunner {
+		return hookRunner{hooks: hooks, final: liveBatch()}
+	}
+	if _, err := composer.ComposeWithHooks(context.Background(), "owner", feed.StreamHooks{}); err != nil {
+		t.Fatalf("ComposeWithHooks: %v", err)
+	}
+	if len(saver.batches) != 2 {
+		t.Fatalf("saves = %d, want 2", len(saver.batches))
+	}
+	if saver.batches[0].State != feed.BatchStreaming || saver.batches[1].State != feed.BatchCompleted {
+		t.Fatalf("saved states = %q, %q", saver.batches[0].State, saver.batches[1].State)
 	}
 }

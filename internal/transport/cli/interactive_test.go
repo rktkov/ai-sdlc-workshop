@@ -410,3 +410,25 @@ func TestChooseRefreshSource(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyInteractiveCardUpsert(t *testing.T) {
+	var payload contract.Feed
+	if _, err := applyInteractiveEvent("batch.started", []byte(`{"batch_id":"b1","state":"streaming"}`), &payload, io.Discard); err != nil {
+		t.Fatalf("batch.started: %v", err)
+	}
+	if _, err := applyInteractiveEvent("card.upsert", []byte(`{"card_id":"c1","video_id":"v1","state":"pending","position":0}`), &payload, io.Discard); err != nil {
+		t.Fatalf("pending card: %v", err)
+	}
+	if _, err := applyInteractiveEvent("card.upsert", []byte(`{"card_id":"c1","video_id":"v1","state":"analyzed","position":0}`), &payload, io.Discard); err != nil {
+		t.Fatalf("analyzed card: %v", err)
+	}
+	if len(payload.Cards) != 1 || payload.Cards[0].State != "analyzed" {
+		t.Fatalf("cards = %+v", payload.Cards)
+	}
+	if _, err := applyInteractiveEvent("batch.started", []byte(`{"batch_id":"b2","state":"streaming"}`), &payload, io.Discard); err != nil {
+		t.Fatalf("second batch.started: %v", err)
+	}
+	if len(payload.Cards) != 0 {
+		t.Fatalf("cards were not reset: %+v", payload.Cards)
+	}
+}

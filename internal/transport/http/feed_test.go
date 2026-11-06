@@ -355,3 +355,155 @@ func TestFeedInvalidSource(t *testing.T) {
 		t.Fatalf("status = %d, want 400", recorder.Code)
 	}
 }
+
+type streamFeedProvider struct {
+	batch feed.Batch
+}
+
+func (p streamFeedProvider) Feed(context.Context, string) (feed.Batch, error) {
+	return p.batch, nil
+}
+
+func (p streamFeedProvider) FeedWithStream(_ context.Context, _ string, hooks feed.StreamHooks) (feed.Batch, error) {
+	pending := p.batch
+	pending.State = feed.BatchStreaming
+	for i := range pending.Cards {
+		pending.Cards[i].State = feed.StatePending
+	}
+	if hooks.Batch != nil {
+		if err := hooks.Batch(pending); err != nil {
+			return feed.Batch{}, err
+		}
+	}
+	if hooks.Card != nil {
+		hooks.Card(p.batch, p.batch.Cards[0])
+	}
+	return p.batch, nil
+}
+
+func TestFeedStreamsProgressiveCards(t *testing.T) {
+	handler := FeedHandler(streamFeedProvider{batch: feedBatch()})
+	request := httptest.NewRequest(http.MethodGet, "/v1/feed", nil)
+	request.Header.Set("Accept", "text/event-stream")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	body := recorder.Body.String()
+	if !strings.Contains(body, "event: batch.started") {
+		t.Fatalf("body = %s", body)
+	}
+	if strings.Count(body, "event: card.upsert") != 2 {
+		t.Fatalf("card events = %d", strings.Count(body, "event: card.upsert"))
+	}
+	if !strings.Contains(body, `"state":"streaming"`) {
+		t.Fatalf("body = %s", body)
+	}
+	if !strings.Contains(body, `"state":"completed"`) {
+		t.Fatalf("body = %s", body)
+	}
+	if strings.Count(body, "event: batch.done") != 1 {
+		t.Fatalf("done events = %d", strings.Count(body, "event: batch.done"))
+	}
+}
+
+type hookComposer struct {
+	batch  feed.Batch
+	called bool
+}
+
+func (h *hookComposer) Compose(context.Context, string) (feed.Batch, error) {
+	return h.batch, nil
+}
+func (h *hookComposer) ComposeWithHooks(_ context.Context, _ string, hooks feed.StreamHooks) (feed.Batch, error) {
+	h.called = true
+	if hooks.Batch != nil {
+		_ = hooks.Batch(h.batch)
+	}
+	return h.batch, nil
+}
+
+type progressComposer struct {
+	batch  feed.Batch
+	called bool
+}
+
+func (p *progressComposer) Compose(context.Context, string) (feed.Batch, error) {
+	return p.batch, nil
+}
+func (p *progressComposer) ComposeWithProgress(_ context.Context, _ string, progress feed.ProgressFunc) (feed.Batch, error) {
+	p.called = true
+	if progress != nil {
+		progress("search", "searching", nil)
+	}
+	return p.batch, nil
+}
+
+func TestLiveFeedProviderStreamCached(t *testing.T) {
+	composer := &hookComposer{batch: feedBatch()}
+	provider := LiveFeedProvider{Store: stubFeedStore{batch: feedBatch()}, Composer: composer, UserID: "owner"}
+	called := false
+	got, err := provider.FeedWithStream(context.Background(), "owner", feed.StreamHooks{
+		Batch: func(feed.Batch) error { called = true; return nil },
+	})
+	if err != nil {
+		t.Fatalf("FeedWithStream: %v", err)
+	}
+	if got.ID != "b1" || called || composer.called {
+		t.Fatalf("batch = %+v, called = %t, composer = %t", got, called, composer.called)
+	}
+}
+
+func TestLiveFeedProviderStreamHooks(t *testing.T) {
+	composer := &hookComposer{batch: feedBatch()}
+	provider := LiveFeedProvider{Store: stubFeedStore{err: feed.ErrNoCachedFeed}, Composer: composer, UserID: "owner"}
+	if _, err := provider.FeedWithStream(context.Background(), "owner", feed.StreamHooks{}); err != nil {
+		t.Fatalf("FeedWithStream: %v", err)
+	}
+	if !composer.called {
+		t.Fatal("ComposeWithHooks was not called")
+	}
+}
+
+func TestLiveFeedProviderStreamProgressFallback(t *testing.T) {
+	composer := &progressComposer{batch: feedBatch()}
+	provider := LiveFeedProvider{Store: stubFeedStore{err: feed.ErrNoCachedFeed}, Composer: composer, UserID: "owner"}
+	var stages []string
+	if _, err := provider.FeedWithStream(context.Background(), "owner", feed.StreamHooks{
+		Progress: func(stage, _ string, _ map[string]any) { stages = append(stages, stage) },
+	}); err != nil {
+		t.Fatalf("FeedWithStream: %v", err)
+	}
+	if !composer.called || len(stages) != 1 || stages[0] != "search" {
+		t.Fatalf("called = %t, stages = %v", composer.called, stages)
+	}
+}
+
+func TestLiveFeedProviderStreamErrors(t *testing.T) {
+	provider := LiveFeedProvider{Store: stubFeedStore{err: errors.New("db")}, Composer: &stubComposer{}}
+	if _, err := provider.FeedWithStream(context.Background(), "owner", feed.StreamHooks{}); err == nil {
+		t.Fatal("FeedWithStream(store error) = nil, want an error")
+	}
+	provider = LiveFeedProvider{Store: stubFeedStore{err: feed.ErrNoCachedFeed}}
+	if _, err := provider.FeedWithStream(context.Background(), "owner", feed.StreamHooks{}); !errors.Is(err, feed.ErrNoCachedFeed) {
+		t.Fatalf("FeedWithStream(nil composer) = %v, want ErrNoCachedFeed", err)
+	}
+}
+
+type failingStreamProvider struct{}
+
+func (failingStreamProvider) Feed(context.Context, string) (feed.Batch, error) {
+	return feed.Batch{}, feed.ErrNoCachedFeed
+}
+func (failingStreamProvider) FeedWithStream(context.Context, string, feed.StreamHooks) (feed.Batch, error) {
+	return feed.Batch{}, feed.ErrNotAuthenticated
+}
+
+func TestFeedStreamErrorEvent(t *testing.T) {
+	handler := FeedHandler(failingStreamProvider{})
+	request := httptest.NewRequest(http.MethodGet, "/v1/feed", nil)
+	request.Header.Set("Accept", "text/event-stream")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if !strings.Contains(recorder.Body.String(), "not_authenticated") {
+		t.Fatalf("body = %s", recorder.Body.String())
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -149,19 +150,24 @@ func applyInteractiveEvent(event string, data []byte, payload *contract.Feed, st
 		}
 	case "batch.started":
 		var start struct {
-			BatchID string `json:"batch_id"`
-			State   string `json:"state"`
+			BatchID           string `json:"batch_id"`
+			State             string `json:"state"`
+			Banner            string `json:"banner"`
+			DegradationReason string `json:"degradation_reason"`
 		}
 		if err := json.Unmarshal(data, &start); err == nil {
 			payload.BatchID = start.BatchID
 			payload.State = start.State
+			payload.Banner = start.Banner
+			payload.DegradationReason = start.DegradationReason
+			payload.Cards = nil
 		}
 	case "card.upsert":
 		var card contract.FeedCard
 		if err := json.Unmarshal(data, &card); err != nil {
 			return false, err
 		}
-		payload.Cards = append(payload.Cards, card)
+		upsertInteractiveCard(payload, card)
 	case "error":
 		var problem struct {
 			Error string `json:"error"`
@@ -175,6 +181,27 @@ func applyInteractiveEvent(event string, data []byte, payload *contract.Feed, st
 		return true, nil
 	}
 	return false, nil
+}
+
+func upsertInteractiveCard(payload *contract.Feed, card contract.FeedCard) {
+	for i := range payload.Cards {
+		if payload.Cards[i].CardID == card.CardID {
+			payload.Cards[i] = card
+		}
+	}
+	found := false
+	for _, existing := range payload.Cards {
+		if existing.CardID == card.CardID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		payload.Cards = append(payload.Cards, card)
+	}
+	sort.SliceStable(payload.Cards, func(i, j int) bool {
+		return payload.Cards[i].Position < payload.Cards[j].Position
+	})
 }
 
 func chooseRefreshSource(reader *bufio.Reader, raw bool, stdout io.Writer, current discovery.RefreshSource) (discovery.RefreshSource, bool) {

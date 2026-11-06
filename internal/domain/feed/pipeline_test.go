@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/rktkov/ytfeed/internal/domain/identity"
 	"github.com/rktkov/ytfeed/internal/pkg/trace"
 )
+
+var fakeCallsMu sync.Mutex
 
 type fakePlanner struct {
 	queries []discovery.Query
@@ -29,6 +32,8 @@ func (f *fakePlanner) Plan([]string) ([]discovery.Query, error) {
 
 func (f *fakePlanner) record(value string) {
 	if f.calls != nil {
+		fakeCallsMu.Lock()
+		defer fakeCallsMu.Unlock()
 		*f.calls = append(*f.calls, value)
 	}
 }
@@ -100,6 +105,8 @@ func (f *fakeYouTube) MostPopular(context.Context, string, string) ([]discovery.
 
 func (f *fakeYouTube) record(value string) {
 	if f.calls != nil {
+		fakeCallsMu.Lock()
+		defer fakeCallsMu.Unlock()
 		*f.calls = append(*f.calls, value)
 	}
 }
@@ -136,6 +143,8 @@ func (f *fakeQuota) Release(context.Context, string) error {
 
 func (f *fakeQuota) record(value string) {
 	if f.calls != nil {
+		fakeCallsMu.Lock()
+		defer fakeCallsMu.Unlock()
 		*f.calls = append(*f.calls, value)
 	}
 }
@@ -155,11 +164,14 @@ func (f *fakeFetcher) Fetch(_ context.Context, videoID string) (string, error) {
 
 func (f *fakeFetcher) record(value string) {
 	if f.calls != nil {
+		fakeCallsMu.Lock()
+		defer fakeCallsMu.Unlock()
 		*f.calls = append(*f.calls, value)
 	}
 }
 
 type fakeTranscripts struct {
+	mu     sync.Mutex
 	staged map[string]analysis.Staged
 	putErr error
 	getErr error
@@ -168,6 +180,8 @@ type fakeTranscripts struct {
 
 func (f *fakeTranscripts) Put(_ context.Context, videoID, text string) (analysis.Staged, error) {
 	f.record("stage")
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.putErr != nil {
 		return analysis.Staged{}, f.putErr
 	}
@@ -181,6 +195,8 @@ func (f *fakeTranscripts) Put(_ context.Context, videoID, text string) (analysis
 
 func (f *fakeTranscripts) Get(_ context.Context, videoID, _ string) (analysis.Staged, error) {
 	f.record("get")
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.getErr != nil {
 		return analysis.Staged{}, f.getErr
 	}
@@ -201,6 +217,8 @@ func (f *fakeTranscripts) Sweep(context.Context, time.Time) (int, error) {
 
 func (f *fakeTranscripts) record(value string) {
 	if f.calls != nil {
+		fakeCallsMu.Lock()
+		defer fakeCallsMu.Unlock()
 		*f.calls = append(*f.calls, value)
 	}
 }
@@ -230,11 +248,14 @@ func (f *fakeAnalyzer) Analyze(_ context.Context, transcript string) (analysis.A
 
 func (f *fakeAnalyzer) record(value string) {
 	if f.calls != nil {
+		fakeCallsMu.Lock()
+		defer fakeCallsMu.Unlock()
 		*f.calls = append(*f.calls, value)
 	}
 }
 
 type fakeAnalyses struct {
+	mu         sync.Mutex
 	items      map[string]analysis.Analysis
 	calls      *[]string
 	findErr    error
@@ -244,6 +265,8 @@ type fakeAnalyses struct {
 
 func (f *fakeAnalyses) FindByKey(_ context.Context, userID, videoID, rubricVersion string) (analysis.Analysis, error) {
 	f.record("find")
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.findErr != nil {
 		return analysis.Analysis{}, f.findErr
 	}
@@ -255,6 +278,8 @@ func (f *fakeAnalyses) FindByKey(_ context.Context, userID, videoID, rubricVersi
 
 func (f *fakeAnalyses) Save(_ context.Context, value analysis.Analysis) error {
 	f.record("save")
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.saveErr != nil {
 		return f.saveErr
 	}
@@ -270,6 +295,8 @@ func (f *fakeAnalyses) Save(_ context.Context, value analysis.Analysis) error {
 
 func (f *fakeAnalyses) record(value string) {
 	if f.calls != nil {
+		fakeCallsMu.Lock()
+		defer fakeCallsMu.Unlock()
 		*f.calls = append(*f.calls, value)
 	}
 }
@@ -946,4 +973,116 @@ func videoIDs(videos []discovery.Video) []string {
 		out = append(out, video.VideoID)
 	}
 	return out
+}
+
+func TestPipelineProgressiveHooks(t *testing.T) {
+	pipeline := testPipeline(nil)
+	pipeline.Source = discovery.RefreshKeywords
+	pipeline.Size = 3
+	var mu sync.Mutex
+	var order []string
+	var pending Batch
+	updated := 0
+	pipeline.OnBatch = func(batch Batch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		pending = batch
+		order = append(order, "batch")
+		return nil
+	}
+	pipeline.OnCard = func(_ Batch, card Card) {
+		mu.Lock()
+		defer mu.Unlock()
+		order = append(order, card.VideoID)
+		updated++
+	}
+	result, err := pipeline.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(order) != 4 || order[0] != "batch" {
+		t.Fatalf("order = %v", order)
+	}
+	if len(pending.Cards) != 3 {
+		t.Fatalf("pending cards = %d", len(pending.Cards))
+	}
+	for _, card := range pending.Cards {
+		if card.State != StatePending {
+			t.Fatalf("pending card = %+v", card)
+		}
+	}
+	if updated != 3 {
+		t.Fatalf("updated = %d, want 3", updated)
+	}
+	if result.Batch.State != BatchCompleted {
+		t.Fatalf("final batch = %+v", result.Batch)
+	}
+}
+
+type gateAnalyzer struct {
+	mu      sync.Mutex
+	active  int
+	max     int
+	started chan struct{}
+	release chan struct{}
+}
+
+func (g *gateAnalyzer) Analyze(ctx context.Context, _ string) (analysis.Analysis, error) {
+	g.mu.Lock()
+	g.active++
+	if g.active > g.max {
+		g.max = g.active
+	}
+	g.mu.Unlock()
+	defer func() {
+		g.mu.Lock()
+		g.active--
+		g.mu.Unlock()
+	}()
+	g.started <- struct{}{}
+	select {
+	case <-g.release:
+	case <-ctx.Done():
+		return analysis.Analysis{}, ctx.Err()
+	}
+	return analysis.Analysis{
+		State:         analysis.StateAnalyzed,
+		Topic:         "ai",
+		RubricVersion: "v1",
+		CompletedAt:   time.Now().UTC(),
+	}, nil
+}
+
+func TestPipelineAnalysisConcurrency(t *testing.T) {
+	pipeline := testPipeline(nil)
+	pipeline.Source = discovery.RefreshKeywords
+	pipeline.Size = 3
+	pipeline.AnalysisConcurrency = 2
+	gate := &gateAnalyzer{started: make(chan struct{}, 3), release: make(chan struct{})}
+	pipeline.Analyzer = gate
+	done := make(chan error, 1)
+	go func() {
+		_, err := pipeline.Run(context.Background())
+		done <- err
+	}()
+	<-gate.started
+	<-gate.started
+	gate.mu.Lock()
+	active := gate.active
+	gate.mu.Unlock()
+	if active != 2 {
+		t.Fatalf("active = %d, want 2", active)
+	}
+	close(gate.release)
+	if err := <-done; err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	gate.mu.Lock()
+	max := gate.max
+	gate.mu.Unlock()
+	if max != 2 {
+		t.Fatalf("max concurrency = %d, want 2", max)
+	}
 }

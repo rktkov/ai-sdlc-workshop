@@ -282,6 +282,6 @@ The owner confirmed all six decisions on 2026-11-06:
 | `T-062` | DONE | Trending and graph sources in the pipeline. Graph reads subscription uploads and related channels. |
 | `T-063` | DONE | `shown_videos`, 90-day pruning, full exclusion, mark on save. |
 | `T-064` | DONE | Per-channel cap, search/graph expansion, source rotation and the 20-unseen shortfall banner. |
-| `T-065` | TODO | Progressive pending cards and analysis updates. |
+| `T-065` | DONE | Pending cards save and stream first. Analysis runs at concurrency 2 and streams analyzed updates. |
 | `T-066` | TODO | Interactive card updates and source picker integration. |
 | `T-067` | TODO | Docs, quota update, contract and E2E tests. |
