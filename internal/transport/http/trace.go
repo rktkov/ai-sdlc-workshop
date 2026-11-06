@@ -16,6 +16,13 @@ func (w *tracedResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
+// Flush keeps SSE working through the trace wrapper.
+func (w *tracedResponseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 // TraceMiddleware records one HTTP span per request.
 func TraceMiddleware(logger *trace.Logger, next http.Handler) http.Handler {
 	if logger == nil {

@@ -55,3 +55,20 @@ func TestTraceMiddlewareNil(t *testing.T) {
 		t.Fatal("handler was not called")
 	}
 }
+
+func TestTraceMiddlewareKeepsFlusher(t *testing.T) {
+	logger := trace.New(t.TempDir())
+	handler := TraceMiddleware(logger, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("traced writer does not implement http.Flusher")
+		}
+		_, _ = w.Write([]byte("event: card.upsert\ndata: {}\n\n"))
+		flusher.Flush()
+	}))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/v1/feed", nil))
+	if recorder.Body.String() == "" {
+		t.Fatal("SSE body is empty")
+	}
+}
