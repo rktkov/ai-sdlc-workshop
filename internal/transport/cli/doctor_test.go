@@ -31,7 +31,7 @@ func TestDoctorLocalReport(t *testing.T) {
 		LLMReachable:   func(context.Context, config.Config) error { return nil },
 		TerminalImages: func() bool { return true },
 		Health: func(context.Context, string, string) (contract.Health, int, error) {
-			return contract.Health{Status: "ok", Version: "dev", SchemaVersion: 12}, http.StatusOK, nil
+			return contract.Health{Status: "ok", Version: "dev", SchemaVersion: 13}, http.StatusOK, nil
 		},
 	}
 	var out, errOut bytes.Buffer
@@ -40,7 +40,7 @@ func TestDoctorLocalReport(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %s", code, errOut.String())
 	}
 	for _, want := range []string{
-		"data_dir:", "db:", "schema: 12", "api_token: present", "token: active",
+		"data_dir:", "db:", "schema: 13", "api_token: present", "token: active",
 		"quota: charged=0 budget=10000", "yt-dlp: 2026.01.01",
 		"llm: reachable model=", "terminal_images: yes", "server: ok",
 	} {

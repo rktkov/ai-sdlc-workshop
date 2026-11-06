@@ -259,3 +259,29 @@ func TestFeedErrorText(t *testing.T) {
 		}
 	}
 }
+
+func TestFeedSourceFlag(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/rating" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("X-Ytfeed-Source"); got != "trending" {
+			t.Errorf("source = %q", got)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "event: batch.done\ndata: {}\n\n")
+	}))
+	defer server.Close()
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"feed", "--refresh", "--source", "trending"}, feedTestEnv(t), &out, &errOut, server.URL); code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, errOut.String())
+	}
+}
+
+func TestFeedInvalidSource(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"feed", "--source", "random"}, feedTestEnv(t), &out, &errOut, ""); code != 2 {
+		t.Fatalf("exit = %d, want 2", code)
+	}
+}

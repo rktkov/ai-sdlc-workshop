@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rktkov/ytfeed/internal/domain/discovery"
 	"github.com/rktkov/ytfeed/internal/domain/feed"
 	"github.com/rktkov/ytfeed/internal/transport/contract"
 )
@@ -113,6 +114,14 @@ func FeedHandler(provider FeedProvider) http.HandlerFunc {
 		ctx := r.Context()
 		if r.Header.Get("X-Ytfeed-Refresh") == "true" {
 			ctx = WithRefresh(ctx)
+		}
+		if raw := r.Header.Get("X-Ytfeed-Source"); raw != "" {
+			source, err := discovery.ParseRefreshSource(raw)
+			if err != nil {
+				writeFeedError(w, http.StatusBadRequest, "invalid_source")
+				return
+			}
+			ctx = discovery.WithRefreshSource(ctx, source)
 		}
 		if !strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 			batch, err := provider.Feed(ctx, "owner")

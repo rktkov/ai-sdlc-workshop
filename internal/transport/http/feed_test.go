@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rktkov/ytfeed/internal/domain/discovery"
 	"github.com/rktkov/ytfeed/internal/domain/feed"
 	"github.com/rktkov/ytfeed/internal/repository/sqlite"
 	"github.com/rktkov/ytfeed/internal/storage"
@@ -313,5 +314,44 @@ func TestFeedProgressStream(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q:\n%s", want, body)
 		}
+	}
+}
+
+type sourceProvider struct {
+	batch  feed.Batch
+	source discovery.RefreshSource
+}
+
+func (p *sourceProvider) Feed(context.Context, string) (feed.Batch, error) {
+	return p.batch, nil
+}
+func (p *sourceProvider) FeedWithProgress(ctx context.Context, _ string, _ feed.ProgressFunc) (feed.Batch, error) {
+	p.source = discovery.RefreshSourceFromContext(ctx)
+	return p.batch, nil
+}
+
+func TestFeedSourceHeader(t *testing.T) {
+	provider := &sourceProvider{batch: feedBatch()}
+	handler := FeedHandler(provider)
+	request := httptest.NewRequest(http.MethodGet, "/v1/feed", nil)
+	request.Header.Set("Accept", "text/event-stream")
+	request.Header.Set("X-Ytfeed-Source", "trending")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	if provider.source != discovery.RefreshTrending {
+		t.Fatalf("source = %q", provider.source)
+	}
+}
+
+func TestFeedInvalidSource(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/v1/feed", nil)
+	request.Header.Set("X-Ytfeed-Source", "random")
+	FeedHandler(stubFeedProvider{batch: feedBatch()}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", recorder.Code)
 	}
 }

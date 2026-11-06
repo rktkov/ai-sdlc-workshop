@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rktkov/ytfeed/internal/domain/discovery"
 	"github.com/rktkov/ytfeed/internal/transport/contract"
 )
 
@@ -295,6 +296,9 @@ func TestInteractiveRefresh(t *testing.T) {
 		switch r.URL.Path {
 		case "/v1/feed":
 			if r.Header.Get("X-Ytfeed-Refresh") == "true" {
+				if got := r.Header.Get("X-Ytfeed-Source"); got != "mixed" {
+					t.Errorf("source = %q", got)
+				}
 				refreshed = true
 				w.Header().Set("Content-Type", "text/event-stream")
 				_, _ = fmt.Fprint(w, "event: progress\ndata: {\"stage\":\"search\",\"message\":\"searching: ai agents\"}\n\n")
@@ -312,7 +316,7 @@ func TestInteractiveRefresh(t *testing.T) {
 	}))
 	defer server.Close()
 	var out, errOut bytes.Buffer
-	if code := RunWithInput(context.Background(), []string{"feed", "--interactive"}, feedTestEnv(t), strings.NewReader("r\nq\n"), &out, &errOut, server.URL); code != 0 {
+	if code := RunWithInput(context.Background(), []string{"feed", "--interactive"}, feedTestEnv(t), strings.NewReader("r\n1\nq\n"), &out, &errOut, server.URL); code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
 	if !refreshed {
@@ -343,7 +347,7 @@ func TestInteractiveRefreshError(t *testing.T) {
 	}))
 	defer server.Close()
 	var out, errOut bytes.Buffer
-	if code := RunWithInput(context.Background(), []string{"feed", "--interactive"}, feedTestEnv(t), strings.NewReader("r\nq\n"), &out, &errOut, server.URL); code != 0 {
+	if code := RunWithInput(context.Background(), []string{"feed", "--interactive"}, feedTestEnv(t), strings.NewReader("r\n1\nq\n"), &out, &errOut, server.URL); code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
 	if !strings.Contains(errOut.String(), "refresh failed") {
@@ -369,7 +373,7 @@ func TestInteractiveRefreshStreamErrors(t *testing.T) {
 	}))
 	defer server.Close()
 	var out, errOut bytes.Buffer
-	if code := RunWithInput(context.Background(), []string{"feed", "--interactive"}, feedTestEnv(t), strings.NewReader("r\nq\n"), &out, &errOut, server.URL); code != 0 {
+	if code := RunWithInput(context.Background(), []string{"feed", "--interactive"}, feedTestEnv(t), strings.NewReader("r\n1\nq\n"), &out, &errOut, server.URL); code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
 	if !strings.Contains(errOut.String(), "refresh failed") || !strings.Contains(errOut.String(), "not authenticated") {
@@ -378,7 +382,31 @@ func TestInteractiveRefreshStreamErrors(t *testing.T) {
 }
 
 func TestFetchInteractiveFeedBadURL(t *testing.T) {
-	if _, err := fetchInteractiveFeed(context.Background(), "token", "://bad", io.Discard); err == nil {
+	if _, err := fetchInteractiveFeed(context.Background(), "token", "://bad", discovery.RefreshMixed, io.Discard); err == nil {
 		t.Fatal("fetchInteractiveFeed = nil, want an error")
+	}
+}
+
+func TestChooseRefreshSource(t *testing.T) {
+	tests := []struct {
+		input string
+		want  discovery.RefreshSource
+		ok    bool
+	}{
+		{"1", discovery.RefreshMixed, true},
+		{"2", discovery.RefreshTrending, true},
+		{"3", discovery.RefreshGraph, true},
+		{"4", discovery.RefreshFresh, true},
+		{"5", discovery.RefreshKeywords, true},
+		{"", discovery.RefreshMixed, true},
+		{"esc", "", false},
+		{"q", "", false},
+	}
+	for _, tt := range tests {
+		reader := bufio.NewReader(strings.NewReader(tt.input + "\n"))
+		got, ok := chooseRefreshSource(reader, false, io.Discard, discovery.RefreshMixed)
+		if ok != tt.ok || (ok && got != tt.want) {
+			t.Fatalf("input %q = %q, %t; want %q, %t", tt.input, got, ok, tt.want, tt.ok)
+		}
 	}
 }

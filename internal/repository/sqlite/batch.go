@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/rktkov/ytfeed/internal/domain/feed"
 )
@@ -29,7 +30,11 @@ func (r *BatchRepository) Save(ctx context.Context, batch feed.Batch) error {
 	if err != nil {
 		return fmt.Errorf("encode batch: %w", err)
 	}
-	if _, err := r.db.ExecContext(ctx, `INSERT INTO batches
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin batch save: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO batches
 		(batch_id, user_id, state, degradation_reason, payload, created_at, completed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(batch_id) DO UPDATE SET
@@ -40,7 +45,30 @@ func (r *BatchRepository) Save(ctx context.Context, batch feed.Batch) error {
 		batch.ID, batch.UserID, string(batch.State), string(batch.DegradationReason),
 		string(payload), batch.CreatedAt, nullableTime(batch.CompletedAt),
 	); err != nil {
+		_ = tx.Rollback()
 		return fmt.Errorf("save batch: %w", err)
+	}
+	now := time.Now().UTC()
+	for _, card := range batch.Cards {
+		if card.VideoID == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO shown_videos
+			(user_id, video_id, batch_id, shown_at) VALUES (?, ?, ?, ?)`,
+			batch.UserID, card.VideoID, batch.ID, now,
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("mark shown video: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM shown_videos WHERE shown_at < ?`,
+		now.Add(-90*24*time.Hour),
+	); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("prune shown videos: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit batch save: %w", err)
 	}
 	return nil
 }

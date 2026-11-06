@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rktkov/ytfeed/internal/config"
+	"github.com/rktkov/ytfeed/internal/domain/discovery"
 	"github.com/rktkov/ytfeed/internal/domain/feed"
 	"github.com/rktkov/ytfeed/internal/domain/taste"
 	"github.com/rktkov/ytfeed/internal/transport/contract"
@@ -20,7 +21,7 @@ import (
 )
 
 func runFeed(ctx context.Context, args []string, getenv func(string) string, stdin io.Reader, stdout, stderr io.Writer, baseURL string) int {
-	jsonOut, refresh, forceInteractive, code := parseFeedFlags(args, stderr)
+	jsonOut, refresh, forceInteractive, source, code := parseFeedFlags(args, stderr)
 	if code != 0 {
 		return code
 	}
@@ -52,6 +53,9 @@ func runFeed(ctx context.Context, args []string, getenv func(string) string, std
 	if refresh {
 		request.Header.Set("X-Ytfeed-Refresh", "true")
 	}
+	if source != "" {
+		request.Header.Set("X-Ytfeed-Source", source)
+	}
 
 	resp, err := (&http.Client{Timeout: 0}).Do(request)
 	if err != nil {
@@ -64,7 +68,7 @@ func runFeed(ctx context.Context, args []string, getenv func(string) string, std
 	}
 	maybeRatingPrompt(ctx, token, baseURL, stderr)
 	if interactive {
-		return renderFeedInteractive(ctx, token, baseURL, resp.Body, stdin, stdout, stderr)
+		return renderFeedInteractive(ctx, token, baseURL, source, resp.Body, stdin, stdout, stderr)
 	}
 	if jsonOut || strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
 		return renderFeedJSON(resp.Body, stdout, stderr)
@@ -72,22 +76,29 @@ func runFeed(ctx context.Context, args []string, getenv func(string) string, std
 	return renderFeedSSE(resp.Body, stdout, stderr)
 }
 
-func parseFeedFlags(args []string, stderr io.Writer) (bool, bool, bool, int) {
+func parseFeedFlags(args []string, stderr io.Writer) (bool, bool, bool, string, int) {
 	flags := flag.NewFlagSet("feed", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	jsonOut := flags.Bool("json", false, "print one JSON object")
 	refresh := flags.Bool("refresh", false, "compose a new batch instead of using the cache")
 	interactive := flags.Bool("interactive", false, "force interactive card mode")
+	source := flags.String("source", "", "refresh source: mixed, trending, graph, fresh or keywords")
 	_ = flags.Bool("quiet", false, "hide the footer")
 	_ = flags.Bool("no-color", false, "disable color")
 	if err := flags.Parse(args); err != nil {
-		return false, false, false, 2
+		return false, false, false, "", 2
 	}
 	if flags.NArg() > 0 {
 		_, _ = fmt.Fprintf(stderr, "ytfeed feed: unexpected argument %q\n", flags.Arg(0))
-		return false, false, false, 2
+		return false, false, false, "", 2
 	}
-	return *jsonOut, *refresh, *interactive, 0
+	if strings.TrimSpace(*source) != "" {
+		if _, err := discovery.ParseRefreshSource(*source); err != nil {
+			_, _ = fmt.Fprintln(stderr, "ytfeed feed: source must be mixed, trending, graph, fresh or keywords")
+			return false, false, false, "", 2
+		}
+	}
+	return *jsonOut, *refresh, *interactive, *source, 0
 }
 
 func isTerminal(value any) bool {

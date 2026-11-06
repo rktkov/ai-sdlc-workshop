@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -47,11 +46,8 @@ func TestExclusionsForUser(t *testing.T) {
 		Cards:     []feed.Card{{CardID: "c4", VideoID: "v4", Title: "t", Channel: "ch", State: feed.StatePending, Position: 0}},
 		CreatedAt: now, CompletedAt: now,
 	}
-	payload, _ := json.Marshal(batch)
-	if _, err := db.Exec(`INSERT INTO batches
-		(batch_id, user_id, state, degradation_reason, payload, created_at, completed_at)
-		VALUES ('b1', 'owner', 'completed', '', ?, ?, ?)`, string(payload), now, now); err != nil {
-		t.Fatalf("insert batch: %v", err)
+	if err := NewBatchRepository(db).Save(context.Background(), batch); err != nil {
+		t.Fatalf("save batch: %v", err)
 	}
 
 	set, err := NewExclusionRepository(db).ForUser(context.Background(), "owner", now.AddDate(0, 0, -7))

@@ -49,6 +49,7 @@ type Pipeline struct {
 	ModelID       string
 	BatchID       string
 	Staging       bool
+	Source        discovery.RefreshSource
 	Exclusions    discovery.ExclusionSet
 
 	Planner     Planner
@@ -82,6 +83,11 @@ func (p *Pipeline) Run(ctx context.Context) (result Result, err error) {
 	if err := p.validate(); err != nil {
 		return Result{}, err
 	}
+	source := p.Source
+	if source == "" {
+		source = discovery.RefreshMixed
+	}
+	p.report("source", "refresh source: "+string(source), nil)
 	p.report("plan", fmt.Sprintf("planning %d queries", len(p.Interests)), nil)
 	queries, err := p.Planner.Plan(p.Interests)
 	if err != nil {

@@ -95,7 +95,7 @@ func liveComposerFixture() (*liveComposer, *fakeBatchSaver, *[]string) {
 		Channels:   fakeChannelLister{},
 		Exclusions: fakeExclusionReader{set: discovery.ExclusionSet{Watched: map[string]bool{"old": true}}},
 		Store:      store,
-		Factory: func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, _ feed.ProgressFunc) pipelineRunner {
+		Factory: func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, _ discovery.RefreshSource, _ feed.ProgressFunc) pipelineRunner {
 			seen = append(seen, interests...)
 			if len(exclusions.Watched) != 1 {
 				seen = append(seen, "missing-exclusions")
@@ -161,7 +161,7 @@ func TestLiveComposerNoProfile(t *testing.T) {
 
 func TestLiveComposerQuotaShortfall(t *testing.T) {
 	composer, store, _ := liveComposerFixture()
-	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet, feed.ProgressFunc) pipelineRunner {
+	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet, discovery.RefreshSource, feed.ProgressFunc) pipelineRunner {
 		return fakeRunner{result: feed.Result{Shortfall: "quota"}}
 	}
 	batch, err := composer.Compose(context.Background(), "owner")
@@ -183,7 +183,7 @@ func TestLiveComposerErrors(t *testing.T) {
 		t.Fatal("Compose(exclusion error) = nil, want an error")
 	}
 	composer, _, _ = liveComposerFixture()
-	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet, feed.ProgressFunc) pipelineRunner {
+	composer.Factory = func(taste.ProfileSnapshot, []string, identity.Token, discovery.ExclusionSet, discovery.RefreshSource, feed.ProgressFunc) pipelineRunner {
 		return fakeRunner{err: errors.New("pipeline")}
 	}
 	if _, err := composer.Compose(context.Background(), "owner"); err == nil {
@@ -217,5 +217,37 @@ func TestLiveComposerProgress(t *testing.T) {
 		if !found {
 			t.Fatalf("missing stage %q in %v", want, stages)
 		}
+	}
+}
+
+func TestLiveComposerSource(t *testing.T) {
+	composer, _, _ := liveComposerFixture()
+	var got discovery.RefreshSource
+	composer.Factory = func(_ taste.ProfileSnapshot, _ []string, _ identity.Token, _ discovery.ExclusionSet, source discovery.RefreshSource, _ feed.ProgressFunc) pipelineRunner {
+		got = source
+		return fakeRunner{result: feed.Result{Batch: liveBatch()}}
+	}
+	ctx := discovery.WithRefreshSource(context.Background(), discovery.RefreshGraph)
+	if _, err := composer.Compose(ctx, "owner"); err != nil {
+		t.Fatalf("Compose: %v", err)
+	}
+	if got != discovery.RefreshGraph {
+		t.Fatalf("source = %q", got)
+	}
+}
+
+func TestLiveComposerDefaultSource(t *testing.T) {
+	composer, _, _ := liveComposerFixture()
+	composer.Source = discovery.RefreshTrending
+	var got discovery.RefreshSource
+	composer.Factory = func(_ taste.ProfileSnapshot, _ []string, _ identity.Token, _ discovery.ExclusionSet, source discovery.RefreshSource, _ feed.ProgressFunc) pipelineRunner {
+		got = source
+		return fakeRunner{result: feed.Result{Batch: liveBatch()}}
+	}
+	if _, err := composer.Compose(context.Background(), "owner"); err != nil {
+		t.Fatalf("Compose: %v", err)
+	}
+	if got != discovery.RefreshTrending {
+		t.Fatalf("source = %q, want trending", got)
 	}
 }

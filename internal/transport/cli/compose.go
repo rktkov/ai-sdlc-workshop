@@ -54,11 +54,12 @@ type pipelineRunner interface {
 	Run(ctx context.Context) (feed.Result, error)
 }
 
-type pipelineFactory func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, progress feed.ProgressFunc) pipelineRunner
+type pipelineFactory func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, source discovery.RefreshSource, progress feed.ProgressFunc) pipelineRunner
 
 type liveComposer struct {
 	UserID     string
 	Size       int
+	Source     discovery.RefreshSource
 	Tokens     tokenReader
 	Profiles   profileReader
 	Channels   channelLister
@@ -79,6 +80,14 @@ func (c *liveComposer) ComposeWithProgress(ctx context.Context, userID string, p
 		return feed.Batch{}, errors.New("live composer is not configured")
 	}
 	now := c.now()
+	source, ok := discovery.RefreshSourceFromContextOK(ctx)
+	if !ok {
+		source = c.Source
+	}
+	if source == "" {
+		source = discovery.RefreshMixed
+	}
+	c.report(progress, "source", "refresh source: "+string(source), nil)
 	c.report(progress, "auth", "checking the Google token", nil)
 	token, err := c.Tokens.ValidToken(ctx)
 	if err != nil {
@@ -106,12 +115,12 @@ func (c *liveComposer) ComposeWithProgress(ctx context.Context, userID string, p
 	}
 	exclusions := discovery.ExclusionSet{}
 	if c.Exclusions != nil {
-		exclusions, err = c.Exclusions.ForUser(ctx, userID, now.AddDate(0, 0, -7))
+		exclusions, err = c.Exclusions.ForUser(ctx, userID, now.AddDate(0, 0, -90))
 		if err != nil {
 			return feed.Batch{}, err
 		}
 	}
-	runner := c.Factory(profile, interests, token, exclusions, progress)
+	runner := c.Factory(profile, interests, token, exclusions, source, progress)
 	if runner == nil {
 		return feed.Batch{}, errors.New("pipeline factory returned nil")
 	}
@@ -193,9 +202,9 @@ func newLiveComposer(cfg config.Config, db *sql.DB) *liveComposer {
 	profiles := sqlite.NewProfileRepository(db)
 	tasteService := &taste.Service{Profiles: profiles}
 	dataDir := cfg.Storage.DataDir
-	factory := func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, progress feed.ProgressFunc) pipelineRunner {
-		source := youtube.NewSource("", nil)
-		source.Region = cfg.YouTube.Region
+	factory := func(profile taste.ProfileSnapshot, interests []string, token identity.Token, exclusions discovery.ExclusionSet, source discovery.RefreshSource, progress feed.ProgressFunc) pipelineRunner {
+		youtubeSource := youtube.NewSource("", nil)
+		youtubeSource.Region = cfg.YouTube.Region
 		quota := &discovery.QuotaService{Store: sqlite.NewQuotaRepository(db)}
 		fetcher := ytdlp.New(cfg.Analysis.YTDLP)
 		staging := transcripts.NewWithLimit(dataDir, cfg.Analysis.MaxBytes)
@@ -204,8 +213,8 @@ func newLiveComposer(cfg config.Config, db *sql.DB) *liveComposer {
 		return &feed.Pipeline{
 			UserID: "owner", AccessToken: token.AccessToken, Interests: interests,
 			Size: cfg.Feed.Size, MicroTarget: 0.2, RubricVersion: profile.RubricVersion,
-			ModelID: cfg.LLM.Model, Staging: cfg.Analysis.Staging, Exclusions: exclusions,
-			Planner: discovery.QueryPlanner{}, YouTube: source, Quota: quota,
+			ModelID: cfg.LLM.Model, Staging: cfg.Analysis.Staging, Source: source, Exclusions: exclusions,
+			Planner: discovery.QueryPlanner{}, YouTube: youtubeSource, Quota: quota,
 			Fetcher: fetcher, Transcripts: staging, Analyzer: analyzer,
 			Analyses: sqlite.NewAnalysisRepository(db),
 			Progress: progress,
@@ -217,8 +226,12 @@ func newLiveComposer(cfg config.Config, db *sql.DB) *liveComposer {
 			tokens = &identity.Manager{Store: tokenfile.New(dataDir), Client: client}
 		}
 	}
+	source, err := discovery.ParseRefreshSource(cfg.Feed.RefreshSource)
+	if err != nil {
+		source = discovery.RefreshMixed
+	}
 	return &liveComposer{
-		UserID: "owner", Size: cfg.Feed.Size,
+		UserID: "owner", Size: cfg.Feed.Size, Source: source,
 		Tokens: tokens, Profiles: tasteService,
 		Channels:   sqlite.NewSubscriptionRepository(db),
 		Exclusions: sqlite.NewExclusionRepository(db),

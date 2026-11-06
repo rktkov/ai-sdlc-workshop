@@ -3,12 +3,10 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/rktkov/ytfeed/internal/domain/discovery"
-	"github.com/rktkov/ytfeed/internal/domain/feed"
 )
 
 // ExclusionRepository builds the discovery exclusion set from local history.
@@ -60,28 +58,22 @@ func (r *ExclusionRepository) ids(ctx context.Context, query, userID string) (ma
 }
 
 func (r *ExclusionRepository) shown(ctx context.Context, userID string, since time.Time) (map[string]bool, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT payload FROM batches
-		WHERE user_id = ? AND completed_at >= ?`, userID, since)
+	rows, err := r.db.QueryContext(ctx, `SELECT video_id FROM shown_videos
+		WHERE user_id = ? AND shown_at >= ?`, userID, since)
 	if err != nil {
-		return nil, fmt.Errorf("read shown batches: %w", err)
+		return nil, fmt.Errorf("read shown videos: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	out := map[string]bool{}
 	for rows.Next() {
-		var payload string
-		if err := rows.Scan(&payload); err != nil {
-			return nil, fmt.Errorf("scan shown batch: %w", err)
+		var videoID string
+		if err := rows.Scan(&videoID); err != nil {
+			return nil, fmt.Errorf("scan shown video: %w", err)
 		}
-		var batch feed.Batch
-		if err := json.Unmarshal([]byte(payload), &batch); err != nil {
-			continue
-		}
-		for _, card := range batch.Cards {
-			out[card.VideoID] = true
-		}
+		out[videoID] = true
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate shown batches: %w", err)
+		return nil, fmt.Errorf("iterate shown videos: %w", err)
 	}
 	return out, nil
 }

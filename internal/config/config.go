@@ -29,7 +29,8 @@ type AppConfig struct {
 
 // FeedConfig controls feed composition.
 type FeedConfig struct {
-	Size int
+	Size          int
+	RefreshSource string // FEED_REFRESH_SOURCE, default mixed
 }
 
 // YouTubeConfig controls the optional Google integrations.
@@ -93,7 +94,10 @@ func defaultConfig(getenv func(string) string) Config {
 			LogEnv:   valueOr(getenv, "LOG_ENV", "development"),
 			LogLevel: valueOr(getenv, "LOG_LEVEL", "info"),
 		},
-		Feed: FeedConfig{Size: 20},
+		Feed: FeedConfig{
+			Size:          20,
+			RefreshSource: valueOr(getenv, "FEED_REFRESH_SOURCE", "mixed"),
+		},
 		YouTube: YouTubeConfig{
 			OAuthClientFile: strings.TrimSpace(getenv("GOOGLE_OAUTH_CLIENT_FILE")),
 			APIKey:          strings.TrimSpace(getenv("YOUTUBE_API_KEY")),
@@ -125,6 +129,9 @@ func validateApp(cfg Config) []string {
 	}
 	if !validLogLevel(cfg.App.LogLevel) {
 		problems = append(problems, "LOG_LEVEL must be debug, info, warn or error")
+	}
+	if !validRefreshSource(cfg.Feed.RefreshSource) {
+		problems = append(problems, "FEED_REFRESH_SOURCE must be mixed, trending, graph, fresh or keywords")
 	}
 	return problems
 }
@@ -219,6 +226,7 @@ func (c Config) Redacted() map[string]string {
 		"log_env":                   c.App.LogEnv,
 		"log_level":                 c.App.LogLevel,
 		"feed_size":                 strconv.Itoa(c.Feed.Size),
+		"feed_refresh_source":       c.Feed.RefreshSource,
 		"llm_base_url":              c.LLM.BaseURL,
 		"llm_model":                 c.LLM.Model,
 		"llm_api_key":               key,
@@ -241,6 +249,15 @@ func valueOr(getenv func(string) string, key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func validRefreshSource(value string) bool {
+	switch value {
+	case "mixed", "trending", "graph", "fresh", "keywords":
+		return true
+	default:
+		return false
+	}
 }
 
 func validLogLevel(level string) bool {

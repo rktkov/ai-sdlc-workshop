@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed on 2026-11-06. Not implemented. Owner decisions are listed in §10.
+Approved on 2026-11-06. Implementation is in progress. `T-060` and `T-063` are done.
+The owner confirmed every decision in §10.
 
 ## 1. Request
 
@@ -259,12 +260,28 @@ Suggested delivery order:
 | Shown table grows forever | Slow query/storage | Index; optional retention config |
 | "Random" is not deterministic | Hard tests | Seeded rotation, recorded seed |
 
-## 10. Decisions requested
+## 10. Decisions confirmed
 
-1. **20 new** means 20 cards with unseen video IDs, not 20 candidates. Confirm.
-2. **Shown history** is forever. Confirm, or choose a retention window such as 90 days.
-3. **Graph definition** is subscribed channels plus channels found in search/trending.
-   Confirm, or require separate channel searches.
-4. **Progressive analysis** is in scope for this change. Confirm.
-5. **Default source** is `mixed`. Confirm.
-6. **Interests** become editable topics, not channel names. Confirm.
+The owner confirmed all six decisions on 2026-11-06:
+
+1. **20 new** means 20 cards with unseen video IDs, not 20 candidates.
+2. **Shown history** is 90 days. `shown_videos` keeps rows for 90 days and prunes older
+   rows on every batch save.
+3. **Graph definition** is subscribed channels plus channels found in search or trending.
+   It never uses separate channel searches.
+4. **Progressive analysis** is in scope for this change.
+5. **Default source** is `mixed` through `FEED_REFRESH_SOURCE=mixed`.
+6. **Interests** become editable topics, not channel names.
+
+## 11. Delivery status
+
+| Task | Status | Notes |
+|------|--------|-------|
+| `T-060` | DONE | Source model, `FEED_REFRESH_SOURCE`, HTTP header, CLI flag, interactive picker. |
+| `T-061` | TODO | `SearchPage`, `PlaylistItems`, uploads playlist metadata. |
+| `T-062` | TODO | Trending and graph sources in the pipeline. |
+| `T-063` | DONE | `shown_videos`, 90-day pruning, full exclusion, mark on save. |
+| `T-064` | TODO | Per-channel cap, candidate expansion, 20-unseen shortfall. |
+| `T-065` | TODO | Progressive pending cards and analysis updates. |
+| `T-066` | TODO | Interactive card updates and source picker integration. |
+| `T-067` | TODO | Docs, quota update, contract and E2E tests. |

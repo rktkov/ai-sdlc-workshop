@@ -98,3 +98,48 @@ func TestBatchCorruptPayload(t *testing.T) {
 		t.Fatal("Get(corrupt) = nil, want an error")
 	}
 }
+
+func TestBatchMarksShown(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	repo := NewBatchRepository(db)
+	if err := repo.Save(context.Background(), batchFixture()); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if err := repo.Save(context.Background(), batchFixture()); err != nil {
+		t.Fatalf("Save twice: %v", err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT count(*) FROM shown_videos WHERE user_id = 'owner'`).Scan(&count); err != nil {
+		t.Fatalf("count shown: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("shown = %d, want 1", count)
+	}
+}
+
+func TestBatchPrunesOldShown(t *testing.T) {
+	db, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "ytfeed.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	old := time.Now().UTC().Add(-91 * 24 * time.Hour)
+	if _, err := db.Exec(`INSERT INTO shown_videos
+		(user_id, video_id, batch_id, shown_at) VALUES ('owner', 'old', 'old-batch', ?)`, old); err != nil {
+		t.Fatalf("insert old: %v", err)
+	}
+	if err := NewBatchRepository(db).Save(context.Background(), batchFixture()); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT count(*) FROM shown_videos WHERE video_id = 'old'`).Scan(&count); err != nil {
+		t.Fatalf("count old: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("old shown rows = %d, want 0", count)
+	}
+}

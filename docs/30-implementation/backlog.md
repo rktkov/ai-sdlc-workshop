@@ -2,6 +2,7 @@
 
 > **Status:** ACTIVE from 2026-11-04. The owner approved the proposal by starting `T-001`.
 > **Date:** 2026-11-04
+> **Last updated:** 2026-11-06
 > **Owner:** Oleg K
 > **Source:** the confirmed system-design suite in [`docs/20-system-design/`](../20-system-design/README.md).
 
@@ -160,6 +161,22 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-06 | Interactive feed | Closed. TTY card mode with h/l/s/j/k/o/q, the reason picker and live gestures. `--interactive` forces line mode; `--json` stays one-shot. |
 | 2026-11-06 | Interactive refresh progress | Closed. `r` composes a new batch over SSE and prints every pipeline step: token, interests, profile, plan, searches, metadata, selection, transcript, analysis and save. |
 
+## Refresh overhaul — trending, graph and 20 unseen cards
+
+Plan: [`refresh-plan.md`](refresh-plan.md). Status: approved 2026-11-06.
+
+| Task | Status | Deps | Size | Acceptance |
+|------|--------|------|------|------------|
+| `T-060` | DONE | — | M | Source modes `mixed`, `trending`, `graph`, `fresh` and `keywords`. Config, HTTP header, CLI flag and interactive picker. |
+| `T-061` | TODO | T-060 | M | `SearchPage`, `playlistItems.list` and uploads playlist metadata. Quota call `playlist_items`. |
+| `T-062` | TODO | T-061 | M | Trending and graph candidate sources merge in the pipeline. |
+| `T-063` | DONE | — | M | `shown_videos`, 90-day pruning, full exclusion and mark on batch save. Schema 13. |
+| `T-064` | TODO | T-062, T-063 | M | Per-channel cap, candidate expansion and the 20-unseen guarantee with a shortfall banner. |
+| `T-065` | TODO | T-064 | L | Save pending cards, analyze at concurrency 2 and stream card updates. |
+| `T-066` | TODO | T-065 | M | Interactive card updates and the source picker refresh path. |
+| `T-067` | TODO | T-060…T-066 | M | Docs, quota update, contract and E2E tests. |
+
+
 ## Progress
 
 | Date | Task | Result |
@@ -205,3 +222,5 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 | 2026-11-05 | `T-053` | DONE. Weekly rating with ISO weeks, batch IDs, `unrated` and migration v10. |
 | 2026-11-05 | `T-054` | DONE. Cached feed, degradation banner, batch snapshots and zero-refetch resume. |
 | 2026-11-05 | `T-055` | DONE. Final check, coverage and integration gate pass. See `e6-final-audit.md`. |
+| 2026-11-06 | `T-063` | DONE. Migration v13 adds `shown_videos`. Batch save marks cards and prunes rows older than 90 days. Exclusions read the full window. |
+| 2026-11-06 | `T-060` | DONE. Refresh source model with five modes. `FEED_REFRESH_SOURCE`, `X-Ytfeed-Source`, `--source` and the interactive picker. `make check` and `make coverage-check` pass. |

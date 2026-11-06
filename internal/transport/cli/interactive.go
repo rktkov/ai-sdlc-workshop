@@ -13,11 +13,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rktkov/ytfeed/internal/domain/discovery"
 	"github.com/rktkov/ytfeed/internal/domain/taste"
 	"github.com/rktkov/ytfeed/internal/transport/contract"
 )
 
-func renderFeedInteractive(ctx context.Context, token, baseURL string, body io.Reader, stdin io.Reader, stdout, stderr io.Writer) int {
+func renderFeedInteractive(ctx context.Context, token, baseURL, defaultSource string, body io.Reader, stdin io.Reader, stdout, stderr io.Writer) int {
 	var payload contract.Feed
 	if err := json.NewDecoder(body).Decode(&payload); err != nil {
 		_, _ = fmt.Fprintf(stderr, "ytfeed feed: decode feed: %v\n", err)
@@ -37,6 +38,10 @@ func renderFeedInteractive(ctx context.Context, token, baseURL string, body io.R
 	defer restore()
 	reader := bufio.NewReader(stdin)
 	picker := &ReasonPicker{}
+	lastSource := discovery.RefreshSource(defaultSource)
+	if lastSource == "" {
+		lastSource = discovery.RefreshMixed
+	}
 	index := 0
 	for {
 		if len(payload.Cards) == 0 {
@@ -49,7 +54,10 @@ func renderFeedInteractive(ctx context.Context, token, baseURL string, body io.R
 				return 0
 			}
 			if strings.EqualFold(key, "r") || strings.EqualFold(key, "refresh") {
-				payload, index = refreshInteractiveFeed(ctx, token, baseURL, stdout, stderr, payload)
+				if chosen, ok := chooseRefreshSource(reader, raw, stdout, lastSource); ok {
+					lastSource = chosen
+					payload, index = refreshInteractiveFeed(ctx, token, baseURL, lastSource, stdout, stderr, payload)
+				}
 			}
 			continue
 		}
@@ -59,7 +67,10 @@ func renderFeedInteractive(ctx context.Context, token, baseURL string, body io.R
 			return 0
 		}
 		if strings.EqualFold(key, "r") || strings.EqualFold(key, "refresh") {
-			payload, index = refreshInteractiveFeed(ctx, token, baseURL, stdout, stderr, payload)
+			if chosen, ok := chooseRefreshSource(reader, raw, stdout, lastSource); ok {
+				lastSource = chosen
+				payload, index = refreshInteractiveFeed(ctx, token, baseURL, lastSource, stdout, stderr, payload)
+			}
 			continue
 		}
 		next, quit := handleInteractiveKey(ctx, token, baseURL, &payload.Cards, index, key, reader, raw, stdout, stderr, picker)
@@ -70,9 +81,9 @@ func renderFeedInteractive(ctx context.Context, token, baseURL string, body io.R
 	}
 }
 
-func refreshInteractiveFeed(ctx context.Context, token, baseURL string, stdout, stderr io.Writer, current contract.Feed) (contract.Feed, int) {
-	_, _ = fmt.Fprintln(stdout, "composing a new batch...")
-	value, err := fetchInteractiveFeed(ctx, token, baseURL, stderr)
+func refreshInteractiveFeed(ctx context.Context, token, baseURL string, source discovery.RefreshSource, stdout, stderr io.Writer, current contract.Feed) (contract.Feed, int) {
+	_, _ = fmt.Fprintf(stdout, "composing a new batch with source %s...\n", source)
+	value, err := fetchInteractiveFeed(ctx, token, baseURL, source, stderr)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "ytfeed feed: refresh failed: %v\n", err)
 		return current, 0
@@ -80,7 +91,7 @@ func refreshInteractiveFeed(ctx context.Context, token, baseURL string, stdout, 
 	return value, 0
 }
 
-func fetchInteractiveFeed(ctx context.Context, token, baseURL string, stderr io.Writer) (contract.Feed, error) {
+func fetchInteractiveFeed(ctx context.Context, token, baseURL string, source discovery.RefreshSource, stderr io.Writer) (contract.Feed, error) {
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
@@ -91,6 +102,9 @@ func fetchInteractiveFeed(ctx context.Context, token, baseURL string, stderr io.
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Accept", "text/event-stream")
 	request.Header.Set("X-Ytfeed-Refresh", "true")
+	if source != "" {
+		request.Header.Set("X-Ytfeed-Source", string(source))
+	}
 	resp, err := (&http.Client{Timeout: 0}).Do(request)
 	if err != nil {
 		return contract.Feed{}, err
@@ -161,6 +175,42 @@ func applyInteractiveEvent(event string, data []byte, payload *contract.Feed, st
 		return true, nil
 	}
 	return false, nil
+}
+
+func chooseRefreshSource(reader *bufio.Reader, raw bool, stdout io.Writer, current discovery.RefreshSource) (discovery.RefreshSource, bool) {
+	if current == "" {
+		current = discovery.RefreshMixed
+	}
+	_, _ = fmt.Fprintln(stdout, "Refresh source:")
+	_, _ = fmt.Fprintln(stdout, "  1 mixed     trends + subscriptions + search (default)")
+	_, _ = fmt.Fprintln(stdout, "  2 trending  trends + search")
+	_, _ = fmt.Fprintln(stdout, "  3 graph     subscriptions + search")
+	_, _ = fmt.Fprintln(stdout, "  4 fresh     trends + subscriptions")
+	_, _ = fmt.Fprintln(stdout, "  5 keywords  search only")
+	_, _ = fmt.Fprintf(stdout, "Enter uses %s. Esc cancels.\n", current)
+	key, err := readInteractiveKey(reader, raw, stdout)
+	if err != nil && key == "" {
+		return "", false
+	}
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "enter", "":
+		return current, true
+	case "1":
+		return discovery.RefreshMixed, true
+	case "2":
+		return discovery.RefreshTrending, true
+	case "3":
+		return discovery.RefreshGraph, true
+	case "4":
+		return discovery.RefreshFresh, true
+	case "5":
+		return discovery.RefreshKeywords, true
+	case "esc", "q":
+		return "", false
+	default:
+		_, _ = fmt.Fprintln(stdout, "choose 1, 2, 3, 4, 5 or Enter")
+		return "", false
+	}
 }
 
 func handleInteractiveKey(ctx context.Context, token, baseURL string, cards *[]contract.FeedCard, index int, key string, reader *bufio.Reader, raw bool, stdout, stderr io.Writer, picker *ReasonPicker) (int, bool) {

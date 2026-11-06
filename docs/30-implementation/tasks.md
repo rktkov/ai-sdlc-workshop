@@ -49,6 +49,8 @@
 | `T-053` | DONE | 2026-11-05 | Weekly rating: one row per ISO week, -1/0/+1/unrated, batch IDs and idempotent duplicates. Migration v10. |
 | `T-054` | DONE | 2026-11-05 | Cached feed, degradation banner, batch snapshots and zero-refetch resume. Migration v11 and E2E tests. |
 | `T-055` | DONE | 2026-11-05 | Final gate: `make check`, `make coverage-check` and `make test-e2e` pass. Integration uses fakes; live data remains open. |
+| `T-063` | DONE | 2026-11-06 | Migration v13 adds `shown_videos`. Batch save marks cards and prunes rows older than 90 days. Exclusions read the full window. |
+| `T-060` | DONE | 2026-11-06 | Refresh source model with five modes. `FEED_REFRESH_SOURCE`, `X-Ytfeed-Source`, `--source` and the interactive picker. |
 
 A task is ready only when its dependencies are `DONE` and its happy and unhappy test
 artifacts from [`test-plan.md`](test-plan.md) exist and fail. A task is done only when the `AGENTS.md`
@@ -135,6 +137,21 @@ Definition of Done passes and the backlog is updated. The implementation backlog
 | `T-053` | Weekly rating | T-041 | `feed` | S | Once per week. `unrated` recorded. Batch IDs stored. |
 | `T-054` | Degradation and resume | T-037, T-040 | `feed`, `analysis` | M | Cached feed. Banner. Crash test with zero re-fetch. |
 | `T-055` | End-to-end run and coverage | T-001…T-054 | all | M | Real data. `make check`. Coverage ≥ 80%. |
+
+## E7 — Refresh overhaul
+
+Plan: [`refresh-plan.md`](refresh-plan.md).
+
+| ID | Task | Deps | Context | Size | Acceptance |
+|----|------|------|---------|------|------------|
+| `T-060` | Refresh source model | — | `discovery`, transport | M | Five modes. Config default `mixed`. HTTP header, CLI flag and interactive picker. |
+| `T-061` | YouTube graph primitives | T-060 | `discovery`, integration | M | `SearchPage`, `playlistItems.list`, uploads metadata and `playlist_items` quota. |
+| `T-062` | Trending and graph sources | T-061 | `discovery`, `feed` | M | Both sources merge and deduplicate with keyword results. |
+| `T-063` | Shown history | — | `feed`, repository | M | `shown_videos`, 90-day pruning, full exclusion and mark on save. |
+| `T-064` | 20-unseen selection | T-062, T-063 | `discovery`, `feed` | M | Per-channel cap and expansion. Shortfall banner. Never pad with seen cards. |
+| `T-065` | Progressive analysis | T-064 | `feed`, transport | L | Pending cards stream first. Analysis updates follow at concurrency 2. |
+| `T-066` | Interactive updates | T-065 | transport | M | Cards update in place. The source picker drives refresh. |
+| `T-067` | Docs and end-to-end proof | T-060…T-066 | all | M | Quota docs, contract tests and E2E no-repeat test. |
 
 ## Open dependencies
 
