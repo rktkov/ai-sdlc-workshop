@@ -22,7 +22,15 @@ import (
 )
 
 type tokenReader interface {
-	Read(ctx context.Context) (identity.Token, error)
+	ValidToken(ctx context.Context) (identity.Token, error)
+}
+
+type fileTokenReader struct {
+	store *tokenfile.FileStore
+}
+
+func (r fileTokenReader) ValidToken(ctx context.Context) (identity.Token, error) {
+	return r.store.Read(ctx)
 }
 
 type profileReader interface {
@@ -66,7 +74,7 @@ func (c *liveComposer) Compose(ctx context.Context, userID string) (feed.Batch, 
 		return feed.Batch{}, errors.New("live composer is not configured")
 	}
 	now := c.now()
-	token, err := c.Tokens.Read(ctx)
+	token, err := c.Tokens.ValidToken(ctx)
 	if err != nil {
 		return feed.Batch{}, fmt.Errorf("%w: %v", feed.ErrNotAuthenticated, err)
 	}
@@ -185,9 +193,15 @@ func newLiveComposer(cfg config.Config, db *sql.DB) *liveComposer {
 			Analyses: sqlite.NewAnalysisRepository(db),
 		}
 	}
+	var tokens tokenReader = fileTokenReader{store: tokenfile.New(dataDir)}
+	if cfg.YouTube.OAuthClientFile != "" {
+		if client, err := identity.LoadClient(cfg.YouTube.OAuthClientFile); err == nil {
+			tokens = &identity.Manager{Store: tokenfile.New(dataDir), Client: client}
+		}
+	}
 	return &liveComposer{
 		UserID: "owner", Size: cfg.Feed.Size,
-		Tokens: tokenfile.New(dataDir), Profiles: tasteService,
+		Tokens: tokens, Profiles: tasteService,
 		Channels:   sqlite.NewSubscriptionRepository(db),
 		Exclusions: sqlite.NewExclusionRepository(db),
 		Store:      sqlite.NewBatchRepository(db), Factory: factory,

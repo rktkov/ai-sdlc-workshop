@@ -17,7 +17,7 @@ type fakeTokenReader struct {
 	err   error
 }
 
-func (f fakeTokenReader) Read(context.Context) (identity.Token, error) { return f.token, f.err }
+func (f fakeTokenReader) ValidToken(context.Context) (identity.Token, error) { return f.token, f.err }
 
 type fakeProfileReader struct {
 	interests    []string
