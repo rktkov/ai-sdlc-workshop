@@ -146,8 +146,6 @@ Definition of Done passes and the backlog is updated. The implementation backlog
 
 ## E7 — Refresh overhaul
 
-Plan: [`refresh-plan.md`](refresh-plan.md).
-
 | ID | Task | Deps | Context | Size | Acceptance |
 |----|------|------|---------|------|------------|
 | `T-060` | Refresh source model | — | `discovery`, transport | M | Five modes. Config default `mixed`. HTTP header, CLI flag and interactive picker. |

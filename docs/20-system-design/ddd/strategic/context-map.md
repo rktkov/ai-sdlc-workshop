@@ -11,7 +11,7 @@
 | **Date** | 2026-11-03 |
 | **Owner** | Oleg K |
 | **Status** | Confirmed at gate `G4` (2026-11-03) |
-| **Sources** | [`prd-ytfeed.md`](../../../10-product/prd-ytfeed.md), [`02-architecture.md`](../../../00-rules/02-architecture.md), [`04-data-persistence.md`](../../../00-rules/04-data-persistence.md), [`08-cli-and-ux.md`](../../../00-rules/08-cli-and-ux.md), [`DECISIONS.md`](../../../00-rules/DECISIONS.md), [`c4/`](../../c4/), [`flows/`](../../flows/), [`open-questions.md`](../../open-questions.md) |
+| **Sources** | [`prd-ytfeed.md`](../../../10-product/prd-ytfeed.md), [`02-architecture.md`](../../../00-rules/02-architecture.md), [`04-data-persistence.md`](../../../00-rules/04-data-persistence.md), [`08-cli-and-ux.md`](../../../00-rules/08-cli-and-ux.md), [`DECISIONS.md`](../../../00-rules/DECISIONS.md), [`c4/`](../../c4/), [`flows/`](../../flows/) |
 | **Siblings** | [`subdomain-map.md`](subdomain-map.md), [`glossary.md`](glossary.md) |
 | **Next** | `ARCH-301`…`ARCH-307` (tactical design) |
 
@@ -29,7 +29,7 @@ This document does two things. It deliberately does not do a third:
 
 The six contexts are fixed by `A-7` and `R-8`. This document **validates** that split. It
 does not invent a new one. A different split needs an ADR and a rules-PR proposal. It would
-also stop the task (`backlog.md`, `ARCH-203` note, `H-9`).
+also stop the task (`H-9`).
 
 **Method.** Each subdomain was derived from the PRD capability table (`F1`…`F28`, §15.1
 epics E1–E6). Each was tested against three questions. Does it create the differentiator?
@@ -123,7 +123,7 @@ The recommendation is **to continue with strategic DDD**. The shape is already f
 |--------------|----------|--------|
 | Strategic | **Adopt**: six contexts, subdomain classes, context map with named patterns, ubiquitous-language glossary | `A-7`, `R-8`, this document, `ARCH-202`, `ARCH-204` |
 | Tactical | **Adopt at two depths**: full for `taste`, `feed`, `discovery`, `analysis`; light for `identity`, `library` | `SD-3` |
-| Evented (CQRS, event sourcing) | **Not implied by this score.** Assessed separately at `ARCH-307`, whose expected outcome is no CQRS, no event sourcing, one in-process process manager for batch resume | `backlog.md` `ARCH-307` |
+| Evented (CQRS, event sourcing) | **Not implied by this score.** Assessed separately at `ARCH-307`, whose expected outcome is no CQRS, no event sourcing, one in-process process manager for batch resume | `ARCH-307` |
 
 This is neither the 0–1 "overkill" path nor the score-4 "full strategic + tactical +
 evented" path. The distinction matters. A 3 buys the **language and the boundaries**, not a

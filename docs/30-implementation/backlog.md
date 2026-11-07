@@ -37,10 +37,8 @@ payload. A task without both is not ready. A task with a skipped test is not don
 | Input | Use |
 |-------|-----|
 | [`prd-ytfeed.md`](../10-product/prd-ytfeed.md) | Requirements `F1`…`F28`, epics E1–E6, Day 1–3 plan |
-| [`20-system-design/README.md`](../20-system-design/README.md) | Design index and gaps |
-| [`traceability.md`](../20-system-design/traceability.md) | Requirement to component and context |
+| [`20-system-design/README.md`](../20-system-design/README.md) | Design index |
 | [`adr/INDEX.md`](../20-system-design/adr/INDEX.md) | Six accepted ADRs |
-| [`open-questions.md`](../20-system-design/open-questions.md) | Provisional decisions |
 | [`00-rules/`](../00-rules/README.md) | Engineering contract |
 
 ## 4. Epics
@@ -115,7 +113,7 @@ are not yet wired to the HTTP API.
 **E6 status:** `T-050`…`T-055` are `DONE` (2026-11-05). Local diagnostics, stats, traces,
 weekly rating, cached feed and the final coverage gate pass. The post-E6 items are also
 closed: live consent, live composition, stats/rating UI, trace call sites, a live model
-run and `OQ-22`. See [`e6-final-audit.md`](e6-final-audit.md).
+run and `OQ-22`.
 
 ## 8. Day 3 — loop and quality
 
@@ -139,15 +137,8 @@ These are not blockers for Sprint 1. They block the analysis and quota tasks.
 
 ## 10. Approval
 
-The owner approved this backlog on 2026-11-04 by starting `T-001`. The remaining fold step
-needs explicit confirmation:
-
-1. Copy the architecture backlog notes into the history section.
-2. Delete `docs/20-system-design/backlog.md` after the fold (`DOC-19`).
-3. Keep working from `tasks.md`.
-
-The proposal was approved on 2026-11-04 when the owner started `T-001`. The architecture
-backlog is kept as history until the owner confirms the fold and deletion (`DOC-19`).
+The owner approved this backlog on 2026-11-04 by starting `T-001`. The architecture backlog
+was folded into this file and deleted (`DOC-19`). Work continues from `tasks.md`.
 
 ## Post-E6 assembly
 
@@ -163,7 +154,7 @@ backlog is kept as history until the owner confirms the fold and deletion (`DOC-
 
 ## Refresh overhaul — trending, graph and 20 unseen cards
 
-Plan: [`refresh-plan.md`](refresh-plan.md). Status: approved 2026-11-06.
+Status: implemented 2026-11-07.
 
 | Task | Status | Deps | Size | Acceptance |
 |------|--------|------|------|------------|
@@ -232,7 +223,7 @@ Open follow-ups:
 | 2026-11-05 | `T-052` | DONE. Local JSONL traces with rotation, retention and a content denylist. |
 | 2026-11-05 | `T-053` | DONE. Weekly rating with ISO weeks, batch IDs, `unrated` and migration v10. |
 | 2026-11-05 | `T-054` | DONE. Cached feed, degradation banner, batch snapshots and zero-refetch resume. |
-| 2026-11-05 | `T-055` | DONE. Final check, coverage and integration gate pass. See `e6-final-audit.md`. |
+| 2026-11-05 | `T-055` | DONE. Final check, coverage and integration gate pass. |
 | 2026-11-06 | `T-063` | DONE. Migration v13 adds `shown_videos`. Batch save marks cards and prunes rows older than 90 days. Exclusions read the full window. |
 | 2026-11-06 | `T-060` | DONE. Refresh source model with five modes. `FEED_REFRESH_SOURCE`, `X-Ytfeed-Source`, `--source` and the interactive picker. `make check` and `make coverage-check` pass. |
 | 2026-11-06 | `T-061` | DONE. YouTube `SearchPage` and `PlaylistItems`, uploads playlist metadata on channel reads, and the `playlist_items` quota call. |

@@ -2,13 +2,11 @@
 
 ## Status
 
-Final gate passed on 2026-11-04. Gates `G0` to `G6` and the assembly audit are
-confirmed. `ARCH-601` remains a proposal.
+Active. This tree is the system-design reference for the implemented code.
 
 `ytfeed` is a local-first, single-binary CLI that composes a personal YouTube feed. It
 discovers candidates, fetches transcripts, analyzes them against a versioned rubric and a
-structured taste profile, and serves a finite card feed. Gestures train the profile. No
-code exists yet. This tree is the system-design contract for the implementation.
+structured taste profile, and serves a finite card feed. Gestures train the profile.
 
 ## System at a glance
 
@@ -40,8 +38,7 @@ flowchart LR
 |--------|------------|
 | Product | [`prd-ytfeed.md`](../10-product/prd-ytfeed.md) |
 | Architecture | This file, then C4 Level 1 and Level 2 |
-| Implementation | [`backlog.md`](backlog.md) and [`adr/INDEX.md`](adr/INDEX.md) |
-| New agent session | [`handoff.md`](handoff.md) |
+| Implementation | `cmd/`, `internal/` and [`adr/INDEX.md`](adr/INDEX.md) |
 | Rules | [`README.md`](../00-rules/README.md) |
 
 ## Artifact map
@@ -67,11 +64,7 @@ flowchart LR
 | Evented decision | [`ddd/tactical/evented-patterns.md`](ddd/tactical/evented-patterns.md) | Confirmed at `G5` |
 | ADRs | [`adr/INDEX.md`](adr/INDEX.md) | Confirmed at `G6` |
 | Executive summary | [`executive-summary.md`](executive-summary.md) | Confirmed at the final gate |
-| Traceability | [`traceability.md`](traceability.md) | Confirmed at the final gate |
 | Rules audit | [`audit/rules-coverage.md`](audit/rules-coverage.md) | Confirmed at the final gate |
-| Open questions | [`open-questions.md`](open-questions.md) | Living |
-| Backlog | [`backlog.md`](backlog.md) | Living |
-| Handoff | [`handoff.md`](handoff.md) | Living |
 
 ## Bounded contexts
 
@@ -98,75 +91,15 @@ open host service or partnership (`context-map.md` §5).
 7. No queue, broker, worker binary or cache server.
 8. All documentation is written in ASD-STE100 (`DOC-20`).
 
-## Known gaps
-
-| Gap | Effect | Owner or next step |
-|-----|--------|--------------------|
-| `ARCH-107` and `ARCH-108` are in review | Data and control flow are not confirmed. | Owner confirmation before the final gate. |
-| `OQ-01` quota exit code | The cached-feed case can be `5` or `6`. | Owner decision before the quota path is implemented. |
-| `OQ-07` rubric location | The machine-readable rubric path is provisional. | Owner decision before the rubric is loaded. |
-| Other open OQs | Interest count, weight rule, library state, lease, late analysis, `--json`. | See [`open-questions.md`](open-questions.md). |
-| Traceability matrix | Not written yet. | `ARCH-503`. |
-| Rules audit | Not written yet. | `ARCH-505`. |
-| Implementation backlog | Does not exist yet. | `ARCH-601`. |
-| Executable code | None. This is documentation only. | Implementation phase after `ARCH-601`. |
-
-## Gap analysis
-
-| Gap | Severity | Effect | Next step |
-|-----|----------|--------|-----------|
-| `ARCH-107` and `ARCH-108` are in review | Medium | The data-flow and control-flow documents are not confirmed. | Owner confirms them before the final gate. |
-| `OQ-01` quota exit code | Medium | The cached-feed case can return `5` or `6`. | Owner decision before the quota path is implemented. |
-| `OQ-07` rubric location | Medium | The machine-readable rubric path is provisional. | Owner decision before the rubric is loaded. |
-| 17 open OQs | Low to medium | Each has a provisional default and is cited where used. | Resolve in the implementation backlog or earlier. |
-| Rule audit not written | Medium | Rule coverage is claimed, not yet audited. | `ARCH-505`. |
-| Implementation backlog absent | Medium | No code task sequence exists. | `ARCH-601` proposal. |
-| No executable code | Expected | This tree is documentation only. | Implementation phase after `ARCH-601`. |
-| ADR gaps for process rules | Low | Error, config, testing, git and docs rules have no ADR. | Accepted by `SD-2`. The index lists them. |
-| P1 features out of v1 | Expected | `F29`…`F34` are not in the P0 matrix. | Future scope. |
-
-There are **no P0 traceability gaps**. Every `F1`…`F28` maps to a component and a
-context, or to transport or storage where that is the correct home.
-
 ## Maintenance guide
 
-1. **Update the backlog first.** [`backlog.md`](backlog.md) is the only status source
-   (`DOC-12`). Move the task, recalculate the counters, update the gate log.
-2. **Do not edit the rules or the PRD directly.** Record a contradiction in
-   [`open-questions.md`](open-questions.md). A rule change needs a rules PR (`H-9`).
-3. **ADRs are immutable.** A change is a new ADR that supersedes the old one (`DOC-6`).
-4. **Write in STE-100.** `DOC-20` applies to every file under `docs/`. Keep sentences
+1. **Do not edit the rules or the PRD directly.** A rule change needs a rules PR (`H-9`).
+2. **ADRs are immutable.** A change is a new ADR that supersedes the old one (`DOC-6`).
+3. **Write in STE-100.** `DOC-20` applies to every file under `docs/`. Keep sentences
    short and active. Keep code, IDs, links and Mermaid unchanged.
-5. **Keep diagrams in Mermaid and in-file.** No external tooling.
-6. **Link, do not copy.** A rule or contract referenced in three places will diverge
+4. **Keep diagrams in Mermaid and in-file.** No external tooling.
+5. **Link, do not copy.** A rule or contract referenced in three places will diverge
    (`DOC-18`).
-7. **Keep the archive read-only.** The pre-STE originals are in
-   [`_archive/pre-ste-2026-11-03/`](../_archive/pre-ste-2026-11-03/).
-8. **Re-run the link check after a move.** Relative links are the most common breakage.
-9. **Do not add a seventh context or a fourth layer.** Each needs an ADR and a rules-PR
+6. **Re-run the link check after a move.** Relative links are the most common breakage.
+7. **Do not add a seventh context or a fourth layer.** Each needs an ADR and a rules-PR
    proposal (`A-1`, `A-7`).
-
-## Session summary
-
-The design suite now covers:
-
-- the rules and the approved PRD.
-- C4 Level 1, Level 2 and Level 3.
-- data flow and control flow.
-- DDD strategic design: viability, subdomains, context map, glossary.
-- DDD tactical design for all six contexts and the evented-pattern decision.
-- six ADRs and the ADR index.
-- the master index, the executive summary, the traceability matrix and this gap analysis.
-- the rules audit is pending and is the last design task before the final gate.
-
-Gates `G0` to `G6` are passed. All tactical models and ADRs are confirmed. The assembly tasks `ARCH-501`…`ARCH-505` are confirmed. `ARCH-601` remains a proposal and
-is outside this backlog's scope.
-
-The main open product decisions are the quota exit code (`OQ-01`) and the rubric location
-(`OQ-07`). The main technical risks are local model quality, `yt-dlp` fragility and the
-privacy trade-off of transcript staging. Each has a documented mitigation.
-
-## Next
-
-`ARCH-505` (rules audit), then the final gate. `ARCH-601` proposes the implementation
-backlog and folds this temporary backlog into it.

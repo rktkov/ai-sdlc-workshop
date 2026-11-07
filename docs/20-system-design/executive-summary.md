@@ -100,5 +100,3 @@ mitigation in the ADRs and the tactical model.
 - Product: [`prd-ytfeed.md`](../10-product/prd-ytfeed.md)
 - Design index: [`README.md`](README.md)
 - Decisions: [`adr/INDEX.md`](adr/INDEX.md)
-- Status: [`backlog.md`](backlog.md)
-- Open questions: [`open-questions.md`](open-questions.md)

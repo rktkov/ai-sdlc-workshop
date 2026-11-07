@@ -11,7 +11,7 @@
 | **Date** | 2026-11-03 |
 | **Owner** | Oleg K |
 | **Status** | Confirmed at gate `G4` (2026-11-03) |
-| **Sources** | [`prd-ytfeed.md`](../../../10-product/prd-ytfeed.md), [`02-architecture.md`](../../../00-rules/02-architecture.md), [`04-data-persistence.md`](../../../00-rules/04-data-persistence.md), [`08-cli-and-ux.md`](../../../00-rules/08-cli-and-ux.md), [`open-questions.md`](../../open-questions.md) |
+| **Sources** | [`prd-ytfeed.md`](../../../10-product/prd-ytfeed.md), [`02-architecture.md`](../../../00-rules/02-architecture.md), [`04-data-persistence.md`](../../../00-rules/04-data-persistence.md), [`08-cli-and-ux.md`](../../../00-rules/08-cli-and-ux.md) |
 | **Siblings** | [`context-map.md`](context-map.md), [`subdomain-map.md`](subdomain-map.md) |
 | **Next** | `ARCH-301`…`ARCH-307` (tactical design) |
 
@@ -21,7 +21,7 @@ A term enters this glossary only if it appears in one of three places.
 
 1. the PRD (`F*`, `US-*`, `Q*`, or a named section), or
 2. `docs/00-rules/` (a rule ID), or
-3. a **resolved** owner decision in [`open-questions.md`](../../open-questions.md).
+3. a **resolved** owner decision recorded in an ADR.
 
 A term whose meaning comes from an unresolved `OQ-*` is marked **provisional** and cites the
 OQ. Architecture and implementation vocabulary is listed separately in §4 and is **not**

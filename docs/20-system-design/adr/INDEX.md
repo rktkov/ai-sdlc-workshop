@@ -72,7 +72,6 @@ rules, not architecture-shaping choices. The rule file is the contract.
 
 ## Related documents
 
-- [`backlog.md`](../backlog.md) — task status and gate log.
 - [`ddd/strategic/context-map.md`](../ddd/strategic/context-map.md) — boundaries and contracts.
 - [`ddd/tactical/evented-patterns.md`](../ddd/tactical/evented-patterns.md) — evented decision.
 - [`c4/02-container-diagram.md`](../c4/02-container-diagram.md) — containers and package mapping.
